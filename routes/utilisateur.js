@@ -1,10 +1,10 @@
 const express =require('express');
 
 
- const router=express.Router();
- const utilisateur = require('../models/utlisateur');
+const router=express.Router();
+const utilisateur = require('../models/utlisateur');
 
- router.post('/adduser', async (req, res) => {
+router.post('/adduser', async (req, res) => {
     try {
         const data = req.body;
         const existingUser = await utilisateur.findOne({ Email: data.Email });
