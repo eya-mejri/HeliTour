@@ -26,10 +26,7 @@ const paiementSchema = new mongoose.Schema({
         enum: ['en_attente', 'réussi', 'échoué'],
         required: true
     },
-    transaction_id: {
-        type: String,
-        required: true
-    }
+ 
 });
 
 const Paiement = mongoose.model('Paiement', paiementSchema);
