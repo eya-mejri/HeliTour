@@ -10,6 +10,7 @@ const ville = mongoose .model('ville' , {
         type: String,
         required: true 
     },
+    circuits: [{ type: mongoose.Schema.Types.ObjectId, ref: 'circuit' }],
    
     
 

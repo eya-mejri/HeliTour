@@ -3,23 +3,42 @@ const express =require('express');
 
 const router=express.Router();
 const circuit = require('../models/circuit');
+const Ville = require('../models/ville');
 
 //AJOUTER Circuit
-router.post('/addCircuit', async (req, res) => {
+router.post('/addCircuit2', async (req, res) => {
     try {
-        const data = req.body;
-        const existingCircuit = await circuit.findOne({Destination: data.Destination });
-        if (existingCircuit) {
-            return res.status(400).json({ error: "Ce circuit est déjà ajouté" });
-        }
+        const { Nom, Description, Prix, Disponibilite,villeId } = req.body;
 
-        const cir = new circuit(data);
-        const savedcir = await cir.save();  
-        res.status(201).json(savedcir);
+        // Validate required fields
+        if (!Nom || !Description ||  Prix === undefined ||!villeId) {
+            return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
+        }
+        // Check if the ville exists
+        const ville = await Ville.findById(villeId);
+        if (!ville) {
+            return res.status(404).json({ error: "Ville introuvable !" });
+        }
+        // Create and save the circuit
+        const newCircuit = new circuit({
+            Nom,
+            Description,
+            Prix,
+            Disponibilite,
+            villeId,
+            vols: []
+        });
+
+        const savedCircuit = await newCircuit.save();
+        // Add the circuit to the list of circuits in the Ville
+        ville.circuits.push(savedCircuit._id);
+        await ville.save();
+        res.status(201).json(savedCircuit);
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
+
 // supprimer circuit par id 
 router.delete('/deletCircuit/:id', async (req, res) => {
     try {
@@ -56,11 +75,37 @@ router.get('/getbyid/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+
+//get circuit by ville name
+router.get('/getbyVille/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+
+        // Find the ville by name
+        const ville1 = await Ville.findOne({ Nom: name });
+
+        if (!ville1) {
+            return res.status(404).json({ error: "Ville non trouvée" });
+        }
+
+        // Find circuits associated with this ville
+        const circuits = await circuit.find({ villeId: ville1._id });
+
+        if (circuits.length === 0) {
+            return res.status(404).json({ error: "Aucun circuit trouvé pour cette ville" });
+        }
+
+        res.status(200).json(circuits);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // mise a jour de circuit by id
 router.put('/putCircuit', async (req, res) => {
     try {
-        const { _id } = req.body;  // Récupère l'email dans le corps de la requête
-        const dataToUpdate = req.body;  // Récupère les autres informations à mettre à jour
+        const { _id } = req.body; 
+        const dataToUpdate = req.body;  
 
         // Trouver un utilisateur par son email
         const updatedCircuit = await circuit.findOneAndUpdate({ _id }, dataToUpdate, { new: true });

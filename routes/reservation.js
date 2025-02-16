@@ -3,19 +3,63 @@ const express =require('express');
 
 const router=express.Router();
 const reservation = require('../models/reservation');
-
+const vol = require('../models/vol');
 
 //AJOUTER Reservation
-router.post('/addReservation', async (req, res) => {
+
+router.post('/addReservation2', async (req, res) => {
     try {
-        const data = req.body;
-        const existingReservation = await reservation.findOne({Num_Reservation: data.Num_Reservation });
+        const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId } = req.body;
+
+        // Check if the reservation already exists
+        const existingReservation = await reservation.findOne({ Num_Reservation });
         if (existingReservation) {
-            return res.status(400).json({ error: "Cette reservation  est déjà ajoutée" });
+            return res.status(400).json({ error: "Cette réservation est déjà ajoutée" });
         }
 
-        const reservation1 = new reservation(data);
-        const savedReservation = await reservation1.save();  
+        // Find the vol (flight)
+        const vol1 = await vol.findById(volId);
+        if (!vol1) {
+            return res.status(404).json({ error: "Vol introuvable!" });
+        }
+
+        // Check if enough places are available
+        if (vol1.place_disponible < nbr_place) {
+            return res.status(400).json({ error: "Pas assez de places disponibles!" });
+        }
+
+        // Create a new reservation
+        const newReservation = new reservation({
+            Num_Reservation,
+            nbr_place,
+            disponibilite,
+            volId: vol1._id // Linking reservation to vol
+        });
+
+        const savedReservation = await newReservation.save();
+        vol1.reservations.push(savedReservation._id);
+        await vol1.save();
+
+        // Update all voyageurs with this reservation ID
+        if (voyageurs && voyageurs.length > 0) {
+            const updatedVoyageurs = await voyageurs.updateMany(
+                { _id: { $in: voyageurs } }, // Find all voyageurs in the list
+                { $set: { reservation: savedReservation._id } } // Assign reservation ID
+            );
+
+            if (updatedVoyageurs.matchedCount !== voyageurs.length) {
+                return res.status(400).json({ error: "Certains voyageurs n'ont pas été trouvés!" });
+            }
+        }
+
+        // Update the vol (reduce available seats & check status)
+        vol1.place_disponible -= nbr_place;
+        if (vol1.place_disponible === 0) {
+            vol1.status = "complet";
+        }
+
+        await vol1.save(); // Save updated vol
+
         res.status(201).json(savedReservation);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -63,10 +107,10 @@ router.get('/getbyid/:id', async (req, res) => {
 // mise a jour de reservation by id
 router.put('/putReservation', async (req, res) => {
     try {
-        const { _id } = req.body;  // Récupère l'email dans le corps de la requête
-        const dataToUpdate = req.body;  // Récupère les autres informations à mettre à jour
+        const { _id } = req.body;  
+        const dataToUpdate = req.body;  
 
-        // Trouver un utilisateur par son email
+        
         const updatedReservation = await reservation.findOneAndUpdate({ _id }, dataToUpdate, { new: true });
 
         if (!updatedReservation) {

@@ -2,12 +2,12 @@ const mongoose = require ('mongoose');
 
 const vol = mongoose .model('vol' , {
      
-    id_circuit: {
-        type: String,
+    Duree: {
+        type: Number,
         required: true 
     },
     Date_depart: {
-        type: String,
+        type: Date,
         required: true 
     },
     place_disponible: {
@@ -18,10 +18,14 @@ const vol = mongoose .model('vol' , {
     status: {
         type: String,
         required: true ,
-        enum: ["complet","disponible"] 
-    }
-    
-
+        enum: ["confirmé","annulé"] ,
+        default:'confirmé'
+    },
+    reservations: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "reservation"  // Reference to the Reservation model
+    }],
+    circuitId: { type: mongoose.Schema.Types.ObjectId, ref: "Circuit", required: true }
     
 })
 

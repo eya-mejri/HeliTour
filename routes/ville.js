@@ -7,14 +7,25 @@ const ville = require('../models/ville');
 //AJOUTER ville
 router.post('/addVille', async (req, res) => {
     try {
-        const data = req.body;
-        const ville1 = new ville(data);
-        const savedVille = await ville1.save();  
-        res.status(201).json(savedVille);
+        const { Nom, Description, circuits } = req.body;
+
+        // Validate required fields
+        if (!Nom || !Description) {
+            return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
+        }
+        // Create and save the ville
+        const newVille = new ville({
+            Nom,
+            Description,
+            circuits:[]
+        });
+        const savedVille = await newVille.save();
+        res.status(201).json({ message: "Ville ajoutée avec succès", savedVille });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
+
 
 // supprimer ville par id 
 router.delete('/deleteVille/:id', async (req, res) => {
@@ -50,6 +61,24 @@ router.get('/getbyid/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+// update ville by id 
+router.get('/updatebyid/:id', async (req, res) => {
+    try {
+        const { _id } = req.body;  
+        const dataToUpdate = req.body;  
+        const updatedVille = await ville.findOneAndUpdate({ _id }, dataToUpdate, { new: true });
+
+        if (!updatedVille) {
+            return res.status(404).json({ error: "ville non trouvé" });
+        }
+
+        res.status(200).json(updatedVille);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+
 
 
 

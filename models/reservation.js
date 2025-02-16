@@ -16,18 +16,17 @@ const reservation = mongoose .model('reservation' , {
         required: true,
         enum: [1,2,3]     
     },
-    id_utilisateur: {
-        type: String,
-        required: true 
-    },
-    id_circuit: {
-        type: String,
-        required: true 
-    },
     Disponibilite: {
         type: Boolean,
         default:true
-    },
+    },voyageurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Voyageur' }],
+
+    // Reference to a single vol (Many reservations can belong to one vol)
+    volId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "vol",  // Reference to the Vol model
+        required: true
+    }
     
 
     
