@@ -24,7 +24,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Créer un nouveau rôle
-router.post('/', async (req, res) => {
+router.post('/add', async (req, res) => {
     const { Nom } = req.body;
     
     // Validation du rôle
@@ -33,6 +33,7 @@ router.post('/', async (req, res) => {
     try {
         const newRole = new Role({
             Nom,
+            users:[]
         });
 
         const savedRole = await newRole.save();

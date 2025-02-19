@@ -1,8 +1,100 @@
 const express = require('express');
 const router = express.Router();
-const Utilisateur = require('../models/utlisateur');
+const Utilisateur = require('../models/utilisateur');
 const Role = require('../models/role');
 const Adresse = require('../models/adresse');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const verifyToken=require('./verifyToken');
+
+
+// Login route
+router.post('/login',async(req,res)=>{
+    data=req.body;
+    usr=await Utilisateur.findOne({Email:data.Email});
+    if(!usr){
+        res.status(404).send("Email non trouvé");
+    }else{
+        validePass=bcrypt.compareSync(data.MDP,usr.MDP);
+        if (!validePass){
+            res.status(401).send("mdp incorrecte");
+        }else{
+            payload={
+                _id:usr._id,
+                Email:usr.Email,
+                Nom:usr.Nom,
+                Prenom:usr.Prenom,
+                Roles:usr.Roles,
+                Num_Telephone:usr.Num_Telephone,
+                Adresse:usr.Adresse,
+                Date_Creation:usr.Date_Creation
+            }
+            token=jwt.sign(payload,'123456789');
+            res.status(200).send({mytoken:token})
+        }
+    }
+})
+
+
+router.get('/userInfo',verifyToken, async(req,res)=>{
+    try{
+        const usr = await Utilisateur.findById(req._id);
+        if (!usr){
+            return res.status(404).send("utilisateur non trouvé");
+        }
+        res.status(200).send(usr);
+    }catch(err){
+        res.status(500).send('err serveur');
+    }
+})
+
+
+
+
+router.post('/register', async (req, res) => {
+    const { Nom, Prenom, Email, Num_Telephone, AdresseData,RoleNom } = req.body;
+    let user = await Utilisateur.findOne({ Email: req.body.Email })
+    const role = await Role.findOne({ Nom: RoleNom });
+        if (!role) {
+            return res.status(400).json({ message: "Le rôle spécifié n'existe pas" });
+        }
+    if (user) {
+        return res.status(400).json({message:'User already exisits. Please sign in'})
+    } else {
+        try {
+            const newAdresse = new Adresse({
+                Pays: AdresseData.Pays,
+                Ville: AdresseData.Ville,
+                Code_Postal: AdresseData.Code_Postal,
+                Adresse_Locale: AdresseData.Adresse_Locale
+            });
+            const savedAdresse = await newAdresse.save();
+            const salt = await bcrypt.genSalt(10)
+            const password = await bcrypt.hash(req.body.MDP, salt)
+            const MDP=password;
+            // Create a new user
+            const newUser = new Utilisateur({
+                Nom,
+                Prenom,
+                Email,
+                MDP, 
+                Num_Telephone,
+                Adresse: savedAdresse._id,
+            Roles: [role._id], 
+            });
+            role.users.push(newUser._id);
+            await role.save();
+            
+            // Save the user to the database
+            await newUser.save();
+            return res.status(201).json({message:"user added"});
+        } catch (err) {
+            return res.status(400).json({ message: err.message })
+        }
+    }
+})
+
+
 
 // Route pour ajouter un utilisateur
 router.post('/adduser', async (req, res) => {

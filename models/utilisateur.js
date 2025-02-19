@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-//est ce que l'utilisateur peut ajouter des photo oui ou non?(a verifier apr l'admin)
+const bcrypt = require('bcryptjs');
+
 const utilisateurSchema = new mongoose.Schema({
     Nom: {
         type: String,
@@ -19,14 +20,13 @@ const utilisateurSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    //a discuter
     Roles: [{ 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Role', 
         required: true 
     }], // Many to Many avec Role
     Num_Telephone: {
-        type: Number,
+        type: String, // Changé en String pour éviter la suppression des zéros initiaux
         required: true,
         validate: {
             validator: function (v) {
@@ -46,4 +46,13 @@ const utilisateurSchema = new mongoose.Schema({
     }
 });
 
-module.exports = mongoose.model('Utilisateur', utilisateurSchema)
+// Hachage du mot de passe avant l'enregistrement
+utilisateurSchema.pre('save', async function (next) {
+    if (this.isModified('MDP')) {
+        const salt = await bcrypt.genSalt(10);
+        this.MDP = await bcrypt.hash(this.MDP, salt);
+    }
+    next();
+});
+
+module.exports = mongoose.model('Utilisateur', utilisateurSchema);
