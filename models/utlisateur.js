@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+//est ce que l'utilisateur peut ajouter des photo oui ou non?(a verifier apr l'admin)
 const utilisateurSchema = new mongoose.Schema({
     Nom: {
         type: String,
@@ -19,11 +19,12 @@ const utilisateurSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    //a discuter
     Roles: [{ 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Role', 
         required: true 
-    }], // Many-to-Many avec Role
+    }], // Many to Many avec Role
     Num_Telephone: {
         type: Number,
         required: true,
@@ -38,7 +39,7 @@ const utilisateurSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Adresse', 
         required: true 
-    }, // One-to-One avec Adresse
+    }, // One to One avec Adresse
     Date_Creation: {
         type: Date,
         default: Date.now

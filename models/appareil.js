@@ -1,0 +1,21 @@
+const mongoose = require('mongoose');
+
+const appareilSchema = new mongoose.Schema({
+    nom: { 
+        type: String, 
+        required: true 
+    },
+    age: { 
+        type: String, 
+        required: true 
+    },
+    photo: [{ 
+        type: String 
+    }],
+    description: { 
+        type: String, 
+        required: true 
+    }
+});
+
+module.exports = mongoose.model('Appareil', appareilSchema);

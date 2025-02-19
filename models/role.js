@@ -7,6 +7,7 @@ const roleSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    //a discuter
     users: [{ 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Utilisateur' 

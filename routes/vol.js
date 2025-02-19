@@ -3,23 +3,61 @@ const express =require('express');
 
 const router=express.Router();
 const vol = require('../models/vol');
+const circuit = require('../models/circuit');
 
 //AJOUTER vol 
-router.post('/addvol', async (req, res) => {
+
+router.post('/addVol', async (req, res) => {
     try {
-        const data = req.body;
-        const existingvol = await vol.findOne({Date_depart: data.Date_depart ,id_circuit: data.id_circuit});
-        if (existingvol) {
-            return res.status(400).json({ error: "Ce vol est déjà ajouté" });
+        const { Date_depart, place_disponible, status,Duree, circuitId } = req.body;
+
+        // Validate required fields
+        if (!Date_depart || place_disponible === undefined || !status || !circuitId || !Duree) {
+            return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
         }
 
-        const vol1 = new vol(data);
-        const savedvol = await vol1.save();  
-        res.status(201).json(savedvol);
+        // Ensure status is valid
+        if (!["complet", "disponible"].includes(status)) {
+            return res.status(400).json({ error: "Statut invalide, doit être 'complet' ou 'disponible'." });
+        }
+
+        // Ensure circuit exists
+        const existingCircuit = await circuit.findById(circuitId);
+        if (!existingCircuit) {
+            return res.status(404).json({ error: "Circuit introuvable !" });
+        }
+
+        // Create and save the vol
+        const newVol = new vol({
+            Date_depart,
+            place_disponible,
+            status,
+            circuitId,
+            Duree,
+            reservations: [] // Initially, no reservations
+        });
+
+        const savedVol = await newVol.save();
+
+        const beforeUpdate = existingCircuit.vols;
+
+        // Update circuit using findByIdAndUpdate
+        const updatedCircuit = await circuit.findByIdAndUpdate(
+            circuitId,
+            { $push: { vols: savedVol._id } },
+            { new: true, useFindAndModify: false }
+        );
+
+        res.status(201).json({
+            message: "Vol ajouté avec succès",
+            savedVol,
+            beforeUpdate,
+            afterUpdate: updatedCircuit.vols
+        });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
-});
+})
 // supprimer vol par id 
 router.delete('/deletVol/:id', async (req, res) => {
     try {

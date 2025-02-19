@@ -10,15 +10,6 @@ const circuit = mongoose .model('circuit' , {
         type: String,
         required: true 
     },
-    Destination: {
-        type: String,
-        required: true,
-        enum: ["tozeur", "Hammamet", "Sousse"]     
-    },
-    Duree: {
-        type: Number,
-        required: true 
-    },
     Prix: {
         type: Number,
     },
@@ -26,8 +17,15 @@ const circuit = mongoose .model('circuit' , {
         type: Boolean,
         default:true
     },
-    
-
+    photo: [{ 
+        type: String 
+    }],
+    vols: [{ type: mongoose.Schema.Types.ObjectId, ref: "vol" }],
+    villeId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "ville",  
+            required: true
+        }
     
 })
 
