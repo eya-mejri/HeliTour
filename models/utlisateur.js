@@ -1,30 +1,31 @@
-const mongoose = require ('mongoose');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
-const utilisateur = mongoose .model('utilisateur' , {
-     
+
+const utilisateurSchema = new mongoose.Schema({
     Nom: {
         type: String,
-        required: true 
+        required: true
     },
     Prenom: {
         type: String,
-        required: true 
+        required: true
     },
     Email: {
         type: String,
         required: true,
         unique: true,
-        match: [/^\S+@\S+\.\S+$/, 'Email invalide'] 
+        match: [/^\S+@\S+\.\S+$/, 'Email invalide']
     },
     MDP: {
         type: String,
+        required: true
+    },
+    Roles: [{ 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Role', 
         required: true 
-    },
-    Role: {
-        type: String,
-        enum: ["Admin", "Utilisateur", "agnece"], // Liste de rôles autorisés
-        default: "Utilisateur"
-    },
+    }], // Many-to-Many avec Role
     Num_Telephone: {
         type: Number,
         required: true,
@@ -33,18 +34,19 @@ const utilisateur = mongoose .model('utilisateur' , {
                 return /^[0-9]{8,15}$/.test(v); // Numéro entre 8 et 15 chiffres
             },
             message: "Numéro de téléphone invalide"
-                }
+        }
     },
-    Address: {
-        type: String,
-        required: true
-    },
+    Adresse: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Adresse', 
+        required: true 
+    }, // One-to-One avec Adresse
     Date_Creation: {
         type: Date,
-        default: Date.now 
+        default: Date.now
     }
+});
 
-    
-})
 
-module.exports = utilisateur;
+
+module.exports = mongoose.model('Utilisateur', utilisateurSchema)
