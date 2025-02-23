@@ -1,17 +1,16 @@
 const express =require('express');
-
+const verifyToken=require('../middlewares/verifyToken');
+const authorizeRoles=require('../middlewares/roleMiddleware');
 
 const router=express.Router();
 const ville = require('../models/ville');
 
-//AJOUTER ville
-router.post('/addVille', async (req, res) => {
+//AJOUTER ville (admin)
+router.post('/addVille',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
-        const { Nom, Description, circuits } = req.body;
-
-        // Validate required fields
+        const { Nom, Description } = req.body;
         if (!Nom || !Description) {
-            return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
+            return res.status(400).json({ error: "des informations manquantes! " });
         }
         // Create and save the ville
         const newVille = new ville({
@@ -26,9 +25,9 @@ router.post('/addVille', async (req, res) => {
     }
 });
 
-
+//je pense on va pas supprimer des villes pour des raisons de data
 // supprimer ville par id 
-router.delete('/deleteVille/:id', async (req, res) => {
+router.delete('/deleteVille/:id', verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const deletedVille = await ville.findByIdAndDelete(id);
@@ -40,6 +39,9 @@ router.delete('/deleteVille/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+
+
+
 // avoir tout les ville
 router.get('/getall', async (req, res) => {
     try {
@@ -48,6 +50,9 @@ router.get('/getall', async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message})};
 });
+
+
+
 // avoir ville by id 
 router.get('/getbyid/:id', async (req, res) => {
     try {
@@ -61,12 +66,14 @@ router.get('/getbyid/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+
+
 // update ville by id 
-router.get('/updatebyid/:id', async (req, res) => {
+router.put('/updatebyid/:id', verifyToken,authorizeRoles('Admin'),async (req, res) => {
     try {
-        const { _id } = req.body;  
+        const { id } = req.params;  
         const dataToUpdate = req.body;  
-        const updatedVille = await ville.findOneAndUpdate({ _id }, dataToUpdate, { new: true });
+        const updatedVille = await ville.findOneAndUpdate({ _id :id}, dataToUpdate, { new: true });
 
         if (!updatedVille) {
             return res.status(404).json({ error: "ville non trouvé" });

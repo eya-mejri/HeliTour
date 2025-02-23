@@ -8,7 +8,8 @@ const verifyToken=(req,res,next)=>{
         if (err){
             return res.status(500).json({message:'Failed to authenticate token'});
         }
-        req._id=decoded._id;
+        req.Utilisateur=decoded;
+        
         next();
     })
 }

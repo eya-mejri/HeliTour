@@ -4,9 +4,13 @@ const express =require('express');
 const router=express.Router();
 const circuit = require('../models/circuit');
 const Ville = require('../models/ville');
+const verifyToken=require('../middlewares/verifyToken');
+const authorizeRoles=require('../middlewares/roleMiddleware');
 
-//AJOUTER Circuit
-router.post('/addCircuit2', async (req, res) => {
+
+
+//AJOUTER Circuit (admin)
+router.post('/addCircuit2', verifyToken,authorizeRoles('Admin'),async (req, res) => {
     try {
         const { Nom, Description, Prix, Disponibilite,villeId } = req.body;
 
@@ -39,8 +43,8 @@ router.post('/addCircuit2', async (req, res) => {
     }
 });
 
-// supprimer circuit par id 
-router.delete('/deletCircuit/:id', async (req, res) => {
+// supprimer circuit par id (admin)
+router.delete('/deletCircuit/:id',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const deletedCircuit = await circuit.findByIdAndDelete(id);
@@ -101,8 +105,8 @@ router.get('/getbyVille/:name', async (req, res) => {
     }
 });
 
-// mise a jour de circuit by id
-router.put('/putCircuit', async (req, res) => {
+// mise a jour de circuit by id (admin)
+router.put('/putCircuit',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const { _id } = req.body; 
         const dataToUpdate = req.body;  

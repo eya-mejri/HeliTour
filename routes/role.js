@@ -1,9 +1,11 @@
 const express = require('express');
 const Role = require('../models/role'); // Assurez-vous que le chemin est correct
 const router = express.Router();
+const verifyToken=require('../middlewares/verifyToken');
+const authorizeRoles=require('../middlewares/roleMiddleware');
 
 // Obtenir tous les rôles
-router.get('/', async (req, res) => {
+router.get('/getall',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const roles = await Role.find();
         res.json(roles);
@@ -12,8 +14,8 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Obtenir un rôle par son ID
-router.get('/:id', async (req, res) => {
+// Obtenir un rôle par son ID (admin)
+router.get('/getbyid/:id',verifyToken,authorizeRoles('Admin'),  async (req, res) => {
     try {
         const role = await Role.findById(req.params.id);
         if (!role) return res.status(404).json({ message: "Rôle non trouvé" });
@@ -24,7 +26,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Créer un nouveau rôle
-router.post('/add', async (req, res) => {
+router.post('/addRole',verifyToken,authorizeRoles('Admin'),  async (req, res) => {
     const { Nom } = req.body;
     
     // Validation du rôle
@@ -44,7 +46,7 @@ router.post('/add', async (req, res) => {
 });
 
 // Mettre à jour un rôle
-router.put('/:id', async (req, res) => {
+router.put('update/:id',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const role = await Role.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!role) return res.status(404).json({ message: "Rôle non trouvé" });
@@ -55,7 +57,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Supprimer un rôle
-router.delete('/:id', async (req, res) => {
+router.delete('delete/:id', verifyToken,authorizeRoles('Admin'),async (req, res) => {
     try {
         const role = await Role.findByIdAndDelete(req.params.id);
         if (!role) return res.status(404).json({ message: "Rôle non trouvé" });

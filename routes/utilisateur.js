@@ -5,13 +5,13 @@ const Role = require('../models/role');
 const Adresse = require('../models/adresse');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const verifyToken=require('./verifyToken');
-
-
-// Login route
+const verifyToken=require('../middlewares/verifyToken');
+const authorizeRoles=require('../middlewares/roleMiddleware');
+// Login 
 router.post('/login',async(req,res)=>{
     data=req.body;
     usr=await Utilisateur.findOne({Email:data.Email});
+    console.log(usr);
     if(!usr){
         res.status(404).send("Email non trouvé");
     }else{
@@ -19,12 +19,15 @@ router.post('/login',async(req,res)=>{
         if (!validePass){
             res.status(401).send("mdp incorrecte");
         }else{
+            role1=await Role.findById(usr.Role)
+            console.log(role1);
+            
             payload={
                 _id:usr._id,
                 Email:usr.Email,
                 Nom:usr.Nom,
                 Prenom:usr.Prenom,
-                Roles:usr.Roles,
+                Role:role1.Nom,
                 Num_Telephone:usr.Num_Telephone,
                 Adresse:usr.Adresse,
                 Date_Creation:usr.Date_Creation
@@ -35,10 +38,16 @@ router.post('/login',async(req,res)=>{
     }
 })
 
+//test role and verify token 
+  router.get('/admin',verifyToken,authorizeRoles('Admin'),(req,res)=>{
+    res.json({message:'welcom admin '});
+  })
 
+
+//get the user info (for account)
 router.get('/userInfo',verifyToken, async(req,res)=>{
     try{
-        const usr = await Utilisateur.findById(req._id);
+        const usr = req.Utilisateur;
         if (!usr){
             return res.status(404).send("utilisateur non trouvé");
         }
@@ -49,15 +58,15 @@ router.get('/userInfo',verifyToken, async(req,res)=>{
 })
 
 
-
-
+//register for users (client or agence)
 router.post('/register', async (req, res) => {
     const { Nom, Prenom, Email, Num_Telephone, AdresseData,RoleNom } = req.body;
     let user = await Utilisateur.findOne({ Email: req.body.Email })
     const role = await Role.findOne({ Nom: RoleNom });
-        if (!role) {
-            return res.status(400).json({ message: "Le rôle spécifié n'existe pas" });
-        }
+       // Vérifier que le rôle est soit "Client" soit "Agence"
+    if (RoleNom !== "Client" && RoleNom !== "Agence") {
+        return res.status(400).json({ message: "Le rôle doit être soit 'Client' soit 'Agence'" });
+    }
     if (user) {
         return res.status(400).json({message:'User already exisits. Please sign in'})
     } else {
@@ -80,11 +89,10 @@ router.post('/register', async (req, res) => {
                 MDP, 
                 Num_Telephone,
                 Adresse: savedAdresse._id,
-            Roles: [role._id], 
+                Role: role._id, 
             });
             role.users.push(newUser._id);
             await role.save();
-            
             // Save the user to the database
             await newUser.save();
             return res.status(201).json({message:"user added"});
@@ -94,19 +102,53 @@ router.post('/register', async (req, res) => {
     }
 })
 
-
-
-// Route pour ajouter un utilisateur
-router.post('/adduser', async (req, res) => {
-    try {
-        const { Nom, Prenom, Email, MDP, Num_Telephone, AdresseData, RoleNom } = req.body;
-
-        // Vérifier si le rôle existe dans la table Role
-        const role = await Role.findOne({ Nom: RoleNom });
-        if (!role) {
-            return res.status(400).json({ message: "Le rôle spécifié n'existe pas" });
+//register for admin (Admin)
+router.post('/registerAdmin',verifyToken,authorizeRoles('Admin'), async (req, res) => {
+    const { Nom, Prenom, Email, Num_Telephone, AdresseData } = req.body;
+    let user = await Utilisateur.findOne({ Email: req.body.Email })
+    const role = await Role.findOne({ Nom: "Admin" });
+        
+    if (user) {
+        return res.status(400).json({message:'User already exisits. Please sign in'})
+    } else {
+        try {
+            const newAdresse = new Adresse({
+                Pays: AdresseData.Pays,
+                Ville: AdresseData.Ville,
+                Code_Postal: AdresseData.Code_Postal,
+                Adresse_Locale: AdresseData.Adresse_Locale
+            });
+            const savedAdresse = await newAdresse.save();
+            const salt = await bcrypt.genSalt(10)
+            const password = await bcrypt.hash(req.body.MDP, salt)
+            const MDP=password;
+            // Create a new user
+            const newUser = new Utilisateur({
+                Nom,
+                Prenom,
+                Email,
+                MDP, 
+                Num_Telephone,
+                Adresse: savedAdresse._id,
+                Role: role._id, 
+            });
+            role.users.push(newUser._id);
+            await role.save();
+            // Save the user to the database
+            await newUser.save();
+            return res.status(201).json({message:"admin added"});
+        } catch (err) {
+            return res.status(400).json({ message: err.message })
         }
+    }
+})
 
+
+
+// register for admins
+/*router.post('/addAdmin', async (req, res) => {
+    try {
+        const { Nom, Prenom, Email, Num_Telephone, AdresseData } = req.body;
         // Créer l'adresse
         const newAdresse = new Adresse({
             Pays: AdresseData.Pays,
@@ -115,7 +157,10 @@ router.post('/adduser', async (req, res) => {
             Adresse_Locale: AdresseData.Adresse_Locale
         });
         const savedAdresse = await newAdresse.save();
-
+        const salt = await bcrypt.genSalt(10)
+        const password = await bcrypt.hash(req.body.MDP, salt)
+        const MDP=password;
+        const role = await Role.findOne({ Nom:"Admin" });
         // Créer l'utilisateur
         const newUser = new Utilisateur({
             Nom,
@@ -124,26 +169,37 @@ router.post('/adduser', async (req, res) => {
             MDP,
             Num_Telephone,
             Adresse: savedAdresse._id,
-            Roles: [role._id], // Associer l'utilisateur au rôle
+            Role: role._id, // Associer l'utilisateur au rôle
         });
         const savedUser = await newUser.save();
-
+        console.log(role);
         // Ajouter l'utilisateur à la liste des utilisateurs du rôle
         role.users.push(savedUser._id);
         await role.save();
 
-        res.status(201).json({ message: "Utilisateur ajouté avec succès", utilisateur: savedUser });
+        res.status(201).json({ message: "Admin est ajouté avec succès", utilisateur: savedUser });
     } catch (error) {
-        res.status(500).json({ message: "Erreur lors de l'ajout de l'utilisateur", error: error.message });
+        res.status(500).json({ message: "Erreur lors de l'ajout de l'admin", error: error.message });
     }
-});
+});*/
 
-router.delete('/deleteuser/:id', async (req, res) => {
+
+//delete user by the admin (admin)
+router.delete('/deleteuser/:id',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const deletedUser = await Utilisateur.findByIdAndDelete(id);  // Correction ici
         if (!deletedUser) {
             return res.status(404).json({ error: "Utilisateur non trouvé" });
+        }
+        if (deletedUser.Adresse) {
+            await Adresse.findByIdAndDelete(deletedUser.Adresse);
+        }
+        const role = await Role.findById(deletedUser.Role);
+        if (role) {
+            // Retirer l'utilisateur de la liste des utilisateurs du table Role
+            role.users = role.users.filter(userId => userId.toString() !== id);
+            await role.save();
         }
         res.status(200).json({ message: "Utilisateur supprimé avec succès", deletedUser });
     } catch (error) {
@@ -151,7 +207,10 @@ router.delete('/deleteuser/:id', async (req, res) => {
     }
 });
 
-router.get('/getall', async (req, res) => {
+
+
+// get all users (admin)
+router.get('/getallUsers', verifyToken,authorizeRoles('Admin'),async (req, res) => {
     try {
         const users = await Utilisateur.find();  // Correction ici
         res.status(200).json(users);
@@ -160,7 +219,8 @@ router.get('/getall', async (req, res) => {
     }
 });
 
-router.get('/getbyid/:id', async (req, res) => {
+//get user by id (admin)
+router.get('/getbyid/:id', verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const user = await Utilisateur.findById(id);  // Correction ici
@@ -173,6 +233,8 @@ router.get('/getbyid/:id', async (req, res) => {
     }
 });
 
+
+//update user (user itself or admin)
 router.put('/putuser', async (req, res) => {
     try {
         const { Email } = req.body;  // Récupère l'email dans le corps de la requête

@@ -21,11 +21,11 @@ const utilisateurSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    Roles: [{ 
+    Role: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Role', 
         required: true 
-    }], // Many-to-Many avec Role
+    }, 
     Num_Telephone: {
         type: Number,
         required: true,
