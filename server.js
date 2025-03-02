@@ -36,5 +36,5 @@ app.use('/adresse', AdresseRouter);
 // Lancement du serveur
 const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Serveur en cours d'exécution sur le port ${PORT}`);
+    console.log(`🚀server work ${PORT}`);
 });
