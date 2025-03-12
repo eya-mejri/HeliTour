@@ -8,7 +8,7 @@ const circuit = require('../models/circuit');
 
 
 //AJOUTER vol (admin)
-router.post('/addVol',verifyToken,authorizeRoles('Admin'), async (req, res) => {
+router.post('/addVol',/*verifyToken,authorizeRoles('Admin'), */async (req, res) => {
     try {
         const { Date_depart, place_disponible, status,Duree, circuitId } = req.body;
 

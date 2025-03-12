@@ -4,6 +4,9 @@ const express =require('express');
 const router=express.Router();
 const reservation = require('../models/reservation');
 const vol = require('../models/vol');
+const Ville = require('../models/ville');
+const Circuit = require('../models/circuit');
+
 
 //AJOUTER Reservation
 
@@ -91,18 +94,53 @@ router.get('/getall', async (req, res) => {
 });
 
 // avoir reservation by id 
-router.get('/getbyid/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const reservation1 = await reservation.findById(id);
-        if (!reservation1) {
-            return res.status(404).json({ error: "reservation non trouvée" });
+    router.get('/getbyid/:id', async (req, res) => {
+        try {
+            const { id } = req.params;
+            const reservation1 = await reservation.findById(id);
+            if (!reservation1) {
+                return res.status(404).json({ error: "reservation non trouvée" });
+            }
+            res.status(200).json(reservation1);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
         }
-        res.status(200).json(reservation1);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
+    });
+
+
+    router.get('/getByVilleName/:villeName', async (req, res) => {
+        try {
+          const { villeName } = req.params;
+      
+          // Step 1: Find the ville by name
+          const ville = await Ville.findOne({ Nom: villeName });
+          if (!ville) {
+            return res.status(404).json({ error: 'Ville not found' });
+          }
+      
+          // Step 2: Find all circuits associated with the ville
+          const circuits = await Circuit.find({ villeId: ville._id });
+          if (!circuits || circuits.length === 0) {
+            return res.status(200).json(null);
+          }
+      
+          // Step 3: Find all vols associated with the circuits
+          const circuitIds = circuits.map((circuit) => circuit._id);
+          const vols = await vol.find({ circuitId: { $in: circuitIds } });
+          if (!vols || vols.length === 0) {
+            return res.status(200).json(null);
+          }
+      
+          // Step 4: Find all reservations associated with the vols
+          const volIds = vols.map((vol) => vol._id);
+          const reservations = await reservation.find({ volId: { $in: volIds } });
+      
+          // Return the reservations
+          res.status(200).json(reservations);
+        } catch (error) {
+          res.status(400).json({ error: error.message });
+        }
+      });
 
 // mise a jour de reservation by id
 router.put('/putReservation', async (req, res) => {

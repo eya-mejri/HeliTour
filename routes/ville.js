@@ -6,7 +6,7 @@ const router=express.Router();
 const ville = require('../models/ville');
 
 //AJOUTER ville (admin)
-router.post('/addVille',verifyToken,authorizeRoles('Admin'), async (req, res) => {
+router.post('/addVille',/*verifyToken,authorizeRoles('Admin'), */async (req, res) => {
     try {
         const { Nom, Description } = req.body;
         if (!Nom || !Description) {

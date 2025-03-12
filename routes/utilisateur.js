@@ -210,7 +210,7 @@ router.delete('/deleteuser/:id',verifyToken,authorizeRoles('Admin'), async (req,
 
 
 // get all users (admin)
-router.get('/getallUsers', verifyToken,authorizeRoles('Admin'),async (req, res) => {
+router.get('/getallUsers', /*verifyToken,authorizeRoles('Admin'),*/async (req, res) => {
     try {
         const users = await Utilisateur.find();  // Correction ici
         res.status(200).json(users);

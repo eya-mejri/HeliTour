@@ -10,7 +10,7 @@ const authorizeRoles=require('../middlewares/roleMiddleware');
 
 
 //AJOUTER Circuit (admin)
-router.post('/addCircuit2', verifyToken,authorizeRoles('Admin'),async (req, res) => {
+router.post('/addCircuit2',/* verifyToken,authorizeRoles('Admin'),*/async (req, res) => {
     try {
         const { Nom, Description, Prix, Disponibilite,villeId } = req.body;
 
