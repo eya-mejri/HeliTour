@@ -93,6 +93,174 @@ router.get('/getall', async (req, res) => {
     }
 });
 
+router.get('/getReservationsWithDetails', async (req, res) => {
+  try {
+    const reservations = await reservation.aggregate([
+      {
+        $lookup: {
+          from: 'vols', // Join with the vol collection
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol', // Unwind the vol array (since $lookup returns an array)
+      },
+      {
+        $lookup: {
+          from: 'circuits', // Join with the circuit collection
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit', // Unwind the circuit array
+      },
+      {
+        $lookup: {
+          from: 'voyageurs', // Join with the voyageur collection
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements', // Join with the paiement collection
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $group: {
+          _id: '$_id', // Group by reservation ID
+          Num_Reservation: { $first: '$Num_Reservation' }, // Include reservation ID
+          reservationDate: { $first: '$Date_Reservation' }, // Include reservation date
+          volDate: { $first: '$vol.Date_depart' }, // Include vol date
+          numberOfVoyageurs: { $first: { $size: '$voyageurs' } }, // Count the number of voyageurs
+          circuitName: { $first: '$circuit.Nom' }, // Include circuit name
+          reservationStatus: { $first: '$vol.status' }, // Include reservation status
+          paiement: { $push: '$paiement' }, // Aggregate paiement records into an array
+        },
+      },
+      {
+        $project: {
+          _id: 0, // Exclude the default _id field
+          reservationId: '$_id', // Include reservation ID
+          Num_Reservation: 1, // Include reservation ID
+          reservationDate: 1, // Include reservation date
+          volDate: 1, // Include vol date
+          numberOfVoyageurs: 1, // Include number of voyageurs
+          circuitName: 1, // Include circuit name
+          reservationStatus: 1, // Include reservation status
+          paiement: 1, // Include paiement details
+        },
+      },
+    ]);
+
+    
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+
+//get reservation details by ville :
+router.get('/getReservationsByVille/:villeName', async (req, res) => {
+  try {
+    const { villeName } = req.params; // Extract villeName from the request parameters
+
+    const reservations = await reservation.aggregate([
+      {
+        $lookup: {
+          from: 'vols', // Join with the vol collection
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol', // Unwind the vol array (since $lookup returns an array)
+      },
+      {
+        $lookup: {
+          from: 'circuits', // Join with the circuit collection
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit', // Unwind the circuit array
+      },
+      {
+        $lookup: {
+          from: 'villes', // Join with the ville collection
+          localField: 'circuit.villeId', // Assuming circuit has a villeId field
+          foreignField: '_id',
+          as: 'ville',
+        },
+      },
+      {
+        $unwind: '$ville', // Unwind the ville array
+      },
+      {
+        $match: {
+          'ville.Nom': villeName, // Filter by ville name
+        },
+      },
+      {
+        $lookup: {
+          from: 'voyageurs', // Join with the voyageur collection
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements', // Join with the paiement collection
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $group: {
+          _id: '$_id', // Group by reservation ID
+          Num_Reservation: { $first: '$Num_Reservation' }, // Include reservation ID
+          reservationDate: { $first: '$Date_Reservation' }, // Include reservation date
+          volDate: { $first: '$vol.Date_depart' }, // Include vol date
+          numberOfVoyageurs: { $first: { $size: '$voyageurs' } }, // Count the number of voyageurs
+          circuitName: { $first: '$circuit.Nom' }, // Include circuit name
+          reservationStatus: { $first: '$vol.status' }, // Include reservation status
+          paiement: { $push: '$paiement' }, // Aggregate paiement records into an array
+        },
+      },
+      {
+        $project: {
+          _id: 0, // Exclude the default _id field
+          reservationId: '$_id', // Include reservation ID
+          Num_Reservation: 1, // Include reservation ID
+          reservationDate: 1, // Include reservation date
+          volDate: 1, // Include vol date
+          numberOfVoyageurs: 1, // Include number of voyageurs
+          circuitName: 1, // Include circuit name
+          reservationStatus: 1, // Include reservation status
+          paiement: 1, // Include paiement details
+        },
+      },
+    ]);
+
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 // avoir reservation by id 
     router.get('/getbyid/:id', async (req, res) => {
         try {

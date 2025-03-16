@@ -48,7 +48,38 @@ router.get('/getPaiementById/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+router.get('/getPaiementsByMonth', async (req, res) => {
+    try {
+        // Step 1: Use MongoDB aggregation to group payments by month and year
+        const paiementsByMonth = await Paiement.aggregate([
+            {
+                $group: {
+                    _id: {
+                        year: { $year: "$date_paiement" }, // Extract year from date_paiement
+                        month: { $month: "$date_paiement" } // Extract month from date_paiement
+                    },
+                    totalMontant: { $sum: "$montant" } // Sum the montant for each group
+                }
+            },
+            {
+                $sort: { "_id.year": 1, "_id.month": 1 } // Sort by year and month
+            },
+            {
+                $project: {
+                    _id: 0, // Exclude the default _id field
+                    year: "$_id.year", // Rename _id.year to year
+                    month: "$_id.month", // Rename _id.month to month
+                    totalMontant: 1 // Include the totalMontant field
+                }
+            }
+        ]);
 
+        // Step 2: Send the response
+        res.status(200).json(paiementsByMonth);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
 
 router.put('/updatePaiement/:id', async (req, res) => {
     try {
