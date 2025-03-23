@@ -1,0 +1,129 @@
+const express = require('express');
+const Appareil = require('../models/appareil'); // Assurez-vous que le chemin est correct
+const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadPath = path.join(__dirname, '..', 'public', 'assets', 'img');
+      // Create the directory if it doesn't exist
+      if (!fs.existsSync(uploadPath)) {
+        fs.mkdirSync(uploadPath, { recursive: true });
+      }
+      cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+      const appareilName = req.body.nom; // Use the appareil name as the image name
+      const fileExtension = path.extname(file.originalname); // Get the file extension
+      const fileName = `${appareilName}${fileExtension}`; // Combine name and extension
+      cb(null, fileName);
+    },
+  });
+  
+  const upload = multer({ storage });
+  
+  // Endpoint to add a new appareil with file upload
+  router.post('/add', upload.single('photo'), async (req, res) => {
+    const { nom, date_de_creation, description } = req.body;
+    const photo = req.file ? req.file.filename : null; // Get the uploaded file name
+  
+    try {
+      const newAppareil = new Appareil({
+        nom,
+        date_de_creation,
+        description,
+        photo, // Save the image name in the database
+      });
+  
+      const savedAppareil = await newAppareil.save();
+      res.status(201).json(savedAppareil);
+    } catch (err) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+
+  router.get('/getbyid/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        console.log('Fetching appareil with ID:', id); // Log the ID
+        // Find the appareil by ID
+        const appareil = await Appareil.findOne({_id :id});
+        console.log('Appareil found:', appareil); // Log the query result
+
+        // Check if the appareil exists
+        if (!appareil) {
+            return res.status(404).json({ error: "Appareil non trouvé" });
+        }
+
+        // Return the appareil
+        res.status(200).json(appareil);
+    } catch (error) {
+        console.error("Error fetching appareil:", error);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
+
+
+
+router.put('/update/:id', upload.single('photo'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { nom, date_de_creation, description } = req.body;
+  
+      // Find the appareil by ID
+      const appareil = await Appareil.findById(id);
+      if (!appareil) {
+        return res.status(404).json({ error: "Appareil non trouvé" });
+      }
+  
+      // Update the appareil details
+      appareil.nom = nom || appareil.nom;
+      appareil.date_de_creation = date_de_creation || appareil.date_de_creation;
+      appareil.description = description || appareil.description;
+  
+      // Update the photo if a new one is uploaded
+      if (req.file) {
+        // Delete the old photo if it exists
+        if (appareil.photo && fs.existsSync(appareil.photo)) {
+          fs.unlinkSync(appareil.photo);
+        }
+        appareil.photo = req.file.filename; // Save the new photo path
+      }
+  
+      // Save the updated appareil
+      await appareil.save();
+  
+      res.status(200).json({ message: "Appareil updated successfully", appareil });
+    } catch (error) {
+      console.error("Error updating appareil:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  });
+  
+/* Obtenir toutes les adresses
+router.post('/add', async (req, res) => {
+    const data= req.body;
+        try {
+            const newAppareil = new Appareil(data);
+    
+            const savedAppareil = await newAppareil.save();
+            res.status(201).json(savedAppareil);
+        } catch (err) {
+            res.status(400).json({ message: err.message });
+        }
+});*/
+
+router.get('/getAll', async (req, res) => {
+    try {
+        const reservation1= await Appareil.find();
+        res.status(200).json(reservation1);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+module.exports = router;

@@ -6,6 +6,7 @@ const reservation = require('../models/reservation');
 const vol = require('../models/vol');
 const Ville = require('../models/ville');
 const Circuit = require('../models/circuit');
+const circuit = require('../models/circuit');
 
 
 //AJOUTER Reservation
@@ -261,6 +262,67 @@ router.get('/getReservationsByVille/:villeName', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+
+// Get reservations grouped by circuit for a specific ville
+router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
+  try {
+    const { villeName } = req.params;
+
+    const reservations = await reservation.aggregate([
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      { $unwind: '$vol' },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      { $unwind: '$circuit' },
+      {
+        $lookup: {
+          from: 'villes',
+          localField: 'circuit.villeId',
+          foreignField: '_id',
+          as: 'ville',
+        },
+      },
+      { $unwind: '$ville' },
+      {
+        $match: {
+          'ville.Nom': villeName,
+        },
+      },
+      {
+        $group: {
+          _id: '$circuit.Nom', // Group by circuit name
+          count: { $sum: 1 }, // Count reservations for each circuit
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          circuitName: '$_id',
+          count: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // avoir reservation by id 
     router.get('/getbyid/:id', async (req, res) => {
         try {
@@ -327,6 +389,41 @@ router.put('/putReservation', async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
+});
+
+
+router.get('/getReservationAmount/:reservationId', async (req, res) => {
+  try {
+      const reservationId = req.params.reservationId;
+
+      // Step 1: Fetch the reservation
+      const reservation1 = await reservation.findById(reservationId)
+          
+      if (!reservation1) {
+          return res.status(404).json({ message: 'Reservation not found' });
+      }
+      const nbr=reservation1.voyageurs.length;
+      // Step 2: Fetch the associated circuit for the vol
+      const vol1 = await vol.findById(reservation1.volId)
+         
+      if (!vol) {
+          return res.status(404).json({ message: 'Vol not found' });
+      }
+
+      if (!vol1.circuitId) {
+          return res.status(404).json({ message: 'Circuit not found for the vol' });
+      }
+
+      // Step 3: Calculate the total amount
+      
+      const circuit1 = await circuit.findById(vol1.circuitId);
+      const totalAmount = circuit1.Prix * nbr;
+
+      // Step 4: Send the response
+      res.status(200).json({ totalAmount });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
 });
 
 

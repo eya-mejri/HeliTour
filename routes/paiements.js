@@ -81,6 +81,56 @@ router.get('/getPaiementsByMonth', async (req, res) => {
     }
 });
 
+router.get('/getPaiementsOfThisMonth', async (req, res) => {
+    try {
+        // Get the current date
+        const currentDate = new Date();
+
+        // Get the start of the current month
+        const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+
+        // Get the end of the current month
+        const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+        // Step 1: Use MongoDB aggregation to filter payments for the current month
+        const paiementsThisMonth = await Paiement.aggregate([
+            {
+                $match: {
+                    date_paiement: {
+                        $gte: startOfMonth, // Greater than or equal to the start of the month
+                        $lte: endOfMonth   // Less than or equal to the end of the month
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: "$date_paiement" }, // Extract year from date_paiement
+                        month: { $month: "$date_paiement" } // Extract month from date_paiement
+                    },
+                    totalMontant: { $sum: "$montant" } // Sum the montant for each group
+                }
+            },
+            {
+                $sort: { "_id.year": 1, "_id.month": 1 } // Sort by year and month
+            },
+            {
+                $project: {
+                    _id: 0, // Exclude the default _id field
+                    year: "$_id.year", // Rename _id.year to year
+                    month: "$_id.month", // Rename _id.month to month
+                    totalMontant: 1 // Include the totalMontant field
+                }
+            }
+        ]);
+
+        // Step 2: Send the response
+        res.status(200).json(paiementsThisMonth);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
 router.put('/updatePaiement/:id', async (req, res) => {
     try {
         const { id } = req.params;

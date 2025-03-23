@@ -178,10 +178,60 @@ router.get('/getVolsToday', async (req, res) => {
     }
 });
 
+router.get('/getall2', async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'Start and end date are required' });
+        }
+
+        console.log('Received startDate:', startDate);
+        console.log('Received endDate:', endDate);
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        console.log('Parsed startDate:', start);
+        console.log('Parsed endDate:', end);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({ message: 'Invalid date format' });
+        }
+
+        const vols = await vol.find({
+            Date_depart: {
+                $gte: start,
+                $lte: end,
+            },
+        });
+
+        console.log('Filtered vols:', vols);
+        res.json(vols);
+    } catch (error) {
+        console.error('Error in /getall2:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+
+router.get('/getfirst', async (req, res) => {
+    try {
+        const firstVol = await vol.find().sort({ Date_depart: 1 }).limit(1).exec(); // Ensures query runs correctly
+        if (firstVol.length > 0) {
+            res.json({ Date_depart: firstVol[0].Date_depart });
+        } else {
+            res.status(404).json({ message: 'No flights found' });
+        }
+    } catch (error) {
+        console.error('Error fetching first flight:', error); // Log error for debugging
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
 
 
 // mise a jour de vol by id
-router.put('/putVol',verifyToken,authorizeRoles('Admin'), async (req, res) => {
+router.put('/putVol',/*verifyToken,authorizeRoles('Admin'),*/ async (req, res) => {
     try {
         const { _id } = req.body;  
         const dataToUpdate = req.body;  

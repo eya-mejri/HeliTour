@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors=require('cors');
+const path = require('path');
+
 const UtilisateurRouter=require('./routes/utilisateur');
 const CircuitRouter=require('./routes/circuit');
 const VolRouter=require('./routes/vol');
@@ -11,6 +13,8 @@ const VoyageurRouter=require('./routes/voyageur');
 const PaiementsRouter = require('./routes/paiements'); // Assurez-vous du bon chemin vers le fichier
 const RoleRouter = require('./routes/role');
 const AdresseRouter = require('./routes/adresse');
+const AppareilRouter = require('./routes/appareil');
+
 
 require('./config/connect');
 
@@ -29,8 +33,12 @@ app.use('/voy',VoyageurRouter);
 app.use('/paiements',PaiementsRouter);
 app.use('/role', RoleRouter);
 app.use('/adresse', AdresseRouter);
+app.use('/appareil', AppareilRouter);
 
 
+
+// Serve static files from the public folder
+app.use(express.static(path.join(__dirname, 'public')));
 app.listen(3000, () => {
     console.log('server work');
 });
