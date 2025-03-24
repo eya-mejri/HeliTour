@@ -1,0 +1,1 @@
+const malek=0;
