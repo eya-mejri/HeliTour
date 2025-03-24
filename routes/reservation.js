@@ -2,13 +2,17 @@ const express =require('express');
 
 
 const router=express.Router();
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const socketClient = require('socket.io-client'); 
 const reservation = require('../models/reservation');
 const vol = require('../models/vol');
 const Ville = require('../models/ville');
 const Circuit = require('../models/circuit');
 const circuit = require('../models/circuit');
 
-
+const socketIOClient = socketClient('http://localhost:3002'); 
 //AJOUTER Reservation
 
 router.post('/addReservation2', async (req, res) => {
@@ -63,6 +67,10 @@ router.post('/addReservation2', async (req, res) => {
         }
 
         await vol1.save(); // Save updated vol
+        socketIOClient.emit('new_reservation', {
+          message: 'New reservation added!',
+          reservation: savedReservation,
+      });
 
         res.status(201).json(savedReservation);
     } catch (error) {

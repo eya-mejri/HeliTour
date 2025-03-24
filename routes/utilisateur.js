@@ -45,17 +45,24 @@ router.post('/login',async(req,res)=>{
 
 
 //get the user info (for account)
-router.get('/userInfo',verifyToken, async(req,res)=>{
-    try{
+router.get('/userInfo', verifyToken, async (req, res) => {
+    try {
         const usr = req.Utilisateur;
-        if (!usr){
-            return res.status(404).send("utilisateur non trouvé");
+        if (!usr) {
+            return res.status(404).send("Utilisateur non trouvé");
         }
-        res.status(200).send(usr);
-    }catch(err){
-        res.status(500).send('err serveur');
+
+        // Populate Adresse and Role fields
+        const userInfo = await Utilisateur.findById(usr._id)
+            .populate('Adresse')
+            .populate('Role')
+            .exec();
+
+        res.status(200).json(userInfo);
+    } catch (err) {
+        res.status(500).send('Erreur serveur');
     }
-})
+});
 
 
 //register for users (client or agence)
