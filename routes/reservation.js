@@ -16,68 +16,65 @@ const socketIOClient = socketClient('http://localhost:3002');
 //AJOUTER Reservation
 
 router.post('/addReservation2', async (req, res) => {
-    try {
-        const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId } = req.body;
+  try {
+      const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId, Status } = req.body;
 
-        // Check if the reservation already exists
-        const existingReservation = await reservation.findOne({ Num_Reservation });
-        if (existingReservation) {
-            return res.status(400).json({ error: "Cette réservation est déjà ajoutée" });
-        }
+      // 1. Check if reservation already exists
+      if (await reservation.findOne({ Num_Reservation })) {
+          return res.status(400).json({ error: "Cette réservation est déjà ajoutée" });
+      }
 
-        // Find the vol (flight)
-        const vol1 = await vol.findById(volId);
-        if (!vol1) {
-            return res.status(404).json({ error: "Vol introuvable!" });
-        }
+      // 2. Find the flight and check availability
+      const vol1 = await vol.findById(volId);
+      if (!vol1) {
+          return res.status(404).json({ error: "Vol introuvable!" });
+      }
 
-        // Check if enough places are available
-        if (vol1.place_disponible < nbr_place) {
-            return res.status(400).json({ error: "Pas assez de places disponibles!" });
-        }
+      if (vol1.place_disponible < nbr_place) {
+          return res.status(400).json({ 
+              error: `Seulement ${vol1.place_disponible} place(s) disponible(s)!` 
+          });
+      }
 
-        // Create a new reservation
-        const newReservation = new reservation({
-            Num_Reservation,
-            nbr_place,
-            disponibilite,
-            volId: vol1._id // Linking reservation to vol
-        });
-
-        const savedReservation = await newReservation.save();
-        vol1.reservations.push(savedReservation._id);
-        await vol1.save();
-
-        // Update all voyageurs with this reservation ID
-        if (voyageurs && voyageurs.length > 0) {
-            const updatedVoyageurs = await voyageurs.updateMany(
-                { _id: { $in: voyageurs } }, // Find all voyageurs in the list
-                { $set: { reservation: savedReservation._id } } // Assign reservation ID
-            );
-
-            if (updatedVoyageurs.matchedCount !== voyageurs.length) {
-                return res.status(400).json({ error: "Certains voyageurs n'ont pas été trouvés!" });
-            }
-        }
-
-        // Update the vol (reduce available seats & check status)
-        vol1.place_disponible -= nbr_place;
-        if (vol1.place_disponible === 0) {
-            vol1.status = "complet";
-        }
-
-        await vol1.save(); // Save updated vol
-        socketIOClient.emit('new_reservation', {
-          message: 'New reservation added!',
-          reservation: savedReservation,
+      // 3. Create and save the reservation
+      const newReservation = await reservation.create({
+          Num_Reservation,
+          nbr_place,
+          disponibilite,
+          volId: vol1._id,
+          Status,
+          voyageurs: voyageurs || []
       });
 
-        res.status(201).json(savedReservation);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
+      // 4. Update flight's available seats
+      vol1.place_disponible -= nbr_place;
+      vol1.reservations.push(newReservation._id);
+      await vol1.save();
 
+      // 5. Update voyageurs if provided
+      if (voyageurs?.length > 0) {
+          await Voyageur.updateMany(
+              { _id: { $in: voyageurs } },
+              { $set: { reservation: newReservation._id } }
+          );
+      }
+
+      // 6. Emit socket event
+      socketIOClient.emit('new_reservation', {
+          message: 'Nouvelle réservation ajoutée!',
+          reservation: newReservation
+      });
+
+      res.status(201).json(newReservation);
+
+  } catch (error) {
+      console.error('Erreur de réservation:', error);
+      res.status(400).json({ 
+          error: "Échec de la réservation",
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+  }
+});
 // supprimer reservation par id
 router.delete('/deleteReservation/:id', async (req, res) => {
     try {
@@ -102,7 +99,354 @@ router.get('/getall', async (req, res) => {
     }
 });
 
+
+
+
+router.get('/bookingAnalytics30Days', async (req, res) => {
+  try {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const sixtyDaysAgo = new Date(thirtyDaysAgo);
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 30);
+
+      // Get counts for all statuses in both periods
+      const [currentPeriodCounts, previousPeriodCounts] = await Promise.all([
+          reservation.aggregate([
+              {
+                  $match: {
+                      Date_Reservation: { 
+                          $gte: thirtyDaysAgo,
+                          $lte: now
+                      }
+                  }
+              },
+              {
+                  $group: {
+                      _id: "$Status",
+                      count: { $sum: 1 }
+                  }
+              }
+          ]),
+          reservation.aggregate([
+              {
+                  $match: {
+                      Date_Reservation: { 
+                          $gte: sixtyDaysAgo,
+                          $lte: thirtyDaysAgo
+                      }
+                  }
+              },
+              {
+                  $group: {
+                      _id: "$Status",
+                      count: { $sum: 1 }
+                  }
+              }
+          ])
+      ]);
+
+      // Convert arrays to objects for easier access
+      const currentCounts = {};
+      currentPeriodCounts.forEach(item => {
+          currentCounts[item._id] = item.count;
+      });
+
+      const previousCounts = {};
+      previousPeriodCounts.forEach(item => {
+          previousCounts[item._id] = item.count;
+      });
+
+      // All possible statuses
+      const allStatuses = ["confirmé", "annulé", "en attente"];
+      
+      // Calculate metrics for each status
+      const results = {};
+      allStatuses.forEach(status => {
+          const current = currentCounts[status] || 0;
+          const previous = previousCounts[status] || 0;
+          
+          let percentageChange = 0;
+          let trend = "stable";
+          
+          if (previous > 0) {
+              percentageChange = ((current - previous) / previous) * 100;
+              if (Math.abs(percentageChange) >= 0.01) {
+                  trend = percentageChange > 0 ? "up" : "down";
+              }
+          } else if (current > 0) {
+              percentageChange = 100;
+              trend = "up";
+          }
+
+          results[status] = {
+              currentPeriodCount: current,
+              previousPeriodCount: previous,
+              percentageChange: percentageChange.toFixed(2),
+              trend,
+              message: current === previous 
+                  ? `No change in ${status} bookings`
+                  : `${status} bookings are ${trend} by ${Math.abs(percentageChange).toFixed(2)}%`
+          };
+      });
+
+      // Add totals
+      const totalCurrent = Object.values(currentCounts).reduce((a, b) => a + b, 0);
+      const totalPrevious = Object.values(previousCounts).reduce((a, b) => a + b, 0);
+      
+      let totalPercentageChange = 0;
+      let totalTrend = "stable";
+      
+      if (totalPrevious > 0) {
+          totalPercentageChange = ((totalCurrent - totalPrevious) / totalPrevious) * 100;
+          if (Math.abs(totalPercentageChange) >= 0.01) {
+              totalTrend = totalPercentageChange > 0 ? "up" : "down";
+          }
+      } else if (totalCurrent > 0) {
+          totalPercentageChange = 100;
+          totalTrend = "up";
+      }
+
+      results.total = {
+          currentPeriodCount: totalCurrent,
+          previousPeriodCount: totalPrevious,
+          percentageChange: totalPercentageChange.toFixed(2),
+          trend: totalTrend,
+          message: totalCurrent === totalPrevious
+              ? "No change in total bookings"
+              : `Total bookings are ${totalTrend} by ${Math.abs(totalPercentageChange).toFixed(2)}%`
+      };
+
+      res.status(200).json({
+          periodStart: thirtyDaysAgo.toISOString(),
+          periodEnd: now.toISOString(),
+          previousPeriodStart: sixtyDaysAgo.toISOString(),
+          previousPeriodEnd: thirtyDaysAgo.toISOString(),
+          analytics: results
+      });
+
+  } catch (error) {
+      console.error('Error in booking analytics:', error);
+      res.status(500).json({ 
+          error: 'Server error',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+  }
+});
+
+/*router.get('/getReservationsWithDetails', async (req, res) => {
+  try {
+    const reservations = await reservation.aggregate([
+      {
+        $lookup: {
+          from: 'vols', // Join with the vol collection
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol', // Unwind the vol array
+      },
+      {
+        $lookup: {
+          from: 'circuits', // Join with the circuit collection
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit', // Unwind the circuit array
+      },
+      {
+        $lookup: {
+          from: 'voyageurs', // Join with the voyageur collection
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements', // Join with the paiement collection
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $unwind: {
+          path: '$voyageurs',
+          preserveNullAndEmptyArrays: true // Handle cases where voyageurs might be empty
+        }
+      },
+      {
+        $group: {
+          _id: '$_id', // Group by reservation ID
+          Num_Reservation: { $first: '$Num_Reservation' },
+          Date_Reservation: { $first: '$Date_Reservation' },
+          nbr_place: { $first: '$nbr_place' },
+          Status: { $first: '$Status' },
+          volDate: { $first: '$vol.Date_depart' },
+          circuitName: { $first: '$circuit.Nom' },
+          circuitPrice: { $first: '$circuit.Prix' },
+          voyageurEmails: { $push: '$voyageurs.email' }, // Collect all voyageur emails
+          paiement: { $first: { $arrayElemAt: ['$paiement', 0] } }, // Get first payment if exists
+        },
+      },
+      {
+        $addFields: {
+          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] } // Calculate total price
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          volDate: 1,
+          nbr_place: 1,
+          Status: 1,
+          circuitName: 1,
+          voyageurEmails: 1,
+          totalPrice: 1,
+          paiementStatus: '$paiement.statut' // Include payment status if needed
+        }
+      }
+    ]);
+
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});*/
+
+
 router.get('/getReservationsWithDetails', async (req, res) => {
+  try {
+    const { startDate, endDate, status, searchEmail } = req.query;
+    
+    // Build the match conditions
+    const matchConditions = [];
+    
+    // Date range filter
+    if (startDate && endDate) {
+      matchConditions.push({
+        'vol.Date_depart': {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      });
+    }
+    
+    // Status filter
+    if (status) {
+      matchConditions.push({
+        Status: status
+      });
+    }
+    
+    // Email search
+    if (searchEmail) {
+      matchConditions.push({
+        'voyageurs.email': { $regex: searchEmail, $options: 'i' }
+      });
+    }
+    
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol',
+      },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit',
+      },
+      {
+        $lookup: {
+          from: 'voyageurs',
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements',
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      ...(matchConditions.length ? [{ $match: { $and: matchConditions } }] : []),
+      {
+        $unwind: {
+          path: '$voyageurs',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          Num_Reservation: { $first: '$Num_Reservation' },
+          Date_Reservation: { $first: '$Date_Reservation' },
+          nbr_place: { $first: '$nbr_place' },
+          Status: { $first: '$Status' },
+          volDate: { $first: '$vol.Date_depart' },
+          circuitName: { $first: '$circuit.Nom' },
+          circuitPrice: { $first: '$circuit.Prix' },
+          voyageurEmails: { $push: '$voyageurs.email' },
+          paiement: { $first: { $arrayElemAt: ['$paiement', 0] } },
+        },
+      },
+      {
+        $addFields: {
+          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          volDate: 1,
+          nbr_place: 1,
+          Status: 1,
+          circuitName: 1,
+          voyageurEmails: 1,
+          totalPrice: 1,
+          paiementStatus: '$paiement.statut'
+        }
+      }
+    ];
+
+    const reservations = await reservation.aggregate(pipeline);
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+
+
+/*router.get('/getReservationsWithDetails', async (req, res) => {
   try {
     const reservations = await reservation.aggregate([
       {
@@ -175,56 +519,63 @@ router.get('/getReservationsWithDetails', async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
-});
-
-
-//get reservation details by ville :
-router.get('/getReservationsByVille/:villeName', async (req, res) => {
+});*/
+/*router.get('/getReservationsByVille/:villeName', async (req, res) => {
   try {
-    const { villeName } = req.params; // Extract villeName from the request parameters
+    const { villeName } = req.params;
+    
+    // Calculate date 365 days ago from now
+    const date365DaysAgo = new Date();
+    date365DaysAgo.setDate(date365DaysAgo.getDate() - 365);
 
     const reservations = await reservation.aggregate([
       {
+        $match: {
+          Date_Reservation: { $gte: date365DaysAgo },
+          Status : "confirmé"
+        }
+      },
+      {
         $lookup: {
-          from: 'vols', // Join with the vol collection
+          from: 'vols',
           localField: 'volId',
           foreignField: '_id',
           as: 'vol',
         },
       },
       {
-        $unwind: '$vol', // Unwind the vol array (since $lookup returns an array)
+        $unwind: '$vol',
       },
       {
         $lookup: {
-          from: 'circuits', // Join with the circuit collection
+          from: 'circuits',
           localField: 'vol.circuitId',
           foreignField: '_id',
           as: 'circuit',
         },
       },
       {
-        $unwind: '$circuit', // Unwind the circuit array
+        $unwind: '$circuit',
       },
       {
         $lookup: {
-          from: 'villes', // Join with the ville collection
-          localField: 'circuit.villeId', // Assuming circuit has a villeId field
+          from: 'villes',
+          localField: 'circuit.villeId',
           foreignField: '_id',
           as: 'ville',
         },
       },
       {
-        $unwind: '$ville', // Unwind the ville array
+        $unwind: '$ville',
       },
       {
         $match: {
-          'ville.Nom': villeName, // Filter by ville name
+          'ville.Nom': villeName,
         },
       },
       {
         $lookup: {
-          from: 'voyageurs', // Join with the voyageur collection
+          from: 'voyageurs',
           localField: 'voyageurs',
           foreignField: '_id',
           as: 'voyageurs',
@@ -232,7 +583,7 @@ router.get('/getReservationsByVille/:villeName', async (req, res) => {
       },
       {
         $lookup: {
-          from: 'paiements', // Join with the paiement collection
+          from: 'paiements',
           localField: '_id',
           foreignField: 'reservation_id',
           as: 'paiement',
@@ -240,27 +591,27 @@ router.get('/getReservationsByVille/:villeName', async (req, res) => {
       },
       {
         $group: {
-          _id: '$_id', // Group by reservation ID
-          Num_Reservation: { $first: '$Num_Reservation' }, // Include reservation ID
-          reservationDate: { $first: '$Date_Reservation' }, // Include reservation date
-          volDate: { $first: '$vol.Date_depart' }, // Include vol date
-          numberOfVoyageurs: { $first: { $size: '$voyageurs' } }, // Count the number of voyageurs
-          circuitName: { $first: '$circuit.Nom' }, // Include circuit name
-          reservationStatus: { $first: '$vol.status' }, // Include reservation status
-          paiement: { $push: '$paiement' }, // Aggregate paiement records into an array
+          _id: '$_id',
+          Num_Reservation: { $first: '$Num_Reservation' },
+          reservationDate: { $first: '$Date_Reservation' },
+          volDate: { $first: '$vol.Date_depart' },
+          numberOfVoyageurs: { $first: { $size: '$voyageurs' } },
+          circuitName: { $first: '$circuit.Nom' },
+          reservationStatus: { $first: '$Status' }, // Changed from vol.status to reservation.Status
+          paiement: { $push: '$paiement' },
         },
       },
       {
         $project: {
-          _id: 0, // Exclude the default _id field
-          reservationId: '$_id', // Include reservation ID
-          Num_Reservation: 1, // Include reservation ID
-          reservationDate: 1, // Include reservation date
-          volDate: 1, // Include vol date
-          numberOfVoyageurs: 1, // Include number of voyageurs
-          circuitName: 1, // Include circuit name
-          reservationStatus: 1, // Include reservation status
-          paiement: 1, // Include paiement details
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          reservationDate: 1,
+          volDate: 1,
+          numberOfVoyageurs: 1,
+          circuitName: 1,
+          reservationStatus: 1,
+          paiement: 1,
         },
       },
     ]);
@@ -270,9 +621,255 @@ router.get('/getReservationsByVille/:villeName', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+*/
 
 
-// Get reservations grouped by circuit for a specific ville
+
+/*router.get('/getReservationsByVille/:villeName', async (req, res) => {
+  try {
+    const { villeName } = req.params;
+
+    const reservations = await reservation.aggregate([
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol',
+      },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit',
+      },
+      {
+        $lookup: {
+          from: 'villes',
+          localField: 'circuit.villeId',
+          foreignField: '_id',
+          as: 'ville',
+        },
+      },
+      {
+        $unwind: '$ville',
+      },
+      {
+        $match: {
+          'ville.Nom': villeName, // Filter by city name only
+        },
+      },
+      {
+        $lookup: {
+          from: 'voyageurs',
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $unwind: {
+          path: '$voyageurs',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          Num_Reservation: { $first: '$Num_Reservation' },
+          Date_Reservation: { $first: '$Date_Reservation' },
+          nbr_place: { $first: '$nbr_place' },
+          Status: { $first: '$Status' },
+          volDate: { $first: '$vol.Date_depart' },
+          circuitName: { $first: '$circuit.Nom' },
+          circuitPrice: { $first: '$circuit.prix' },
+          villeName: { $first: '$ville.Nom' },
+          voyageurEmails: { $push: '$voyageurs.email' },
+         
+        },
+      },
+      {
+        $addFields: {
+          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          volDate: 1,
+          nbr_place: 1,
+          Status: 1,
+          circuitName: 1,
+          villeName: 1,
+          voyageurEmails: 1,
+          totalPrice: 1,
+          
+        }
+      }
+    ]);
+
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});*/
+
+router.get('/getReservationsByVille/:villeName', async (req, res) => {
+  try {
+    const { villeName } = req.params;
+    const { startDate, endDate, status, searchEmail } = req.query;
+    console.log("Search email parameter:", req.query.searchEmail);
+
+    // Build the match conditions
+    const matchConditions = [{
+      'ville.Nom': villeName // Always filter by city name
+    }];
+    
+    // Date range filter
+    if (startDate && endDate) {
+      matchConditions.push({
+        'vol.Date_depart': {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      });
+    }
+    
+    // Status filter
+    if (status) {
+      matchConditions.push({
+        'Status': status
+      });
+    }
+    
+  // NEW: Proper email search implementation
+  if (searchEmail) {
+    matchConditions.push({
+      $or: [
+        { 'voyageurs.email': { $regex: searchEmail, $options: 'i' } },
+        { 'voyageurEmails': { $elemMatch: { $regex: searchEmail, $options: 'i' } } }
+      ]
+    });
+  }
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      {
+        $unwind: '$vol',
+      },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      {
+        $unwind: '$circuit',
+      },
+      {
+        $lookup: {
+          from: 'villes',
+          localField: 'circuit.villeId',
+          foreignField: '_id',
+          as: 'ville',
+        },
+      },
+      {
+        $unwind: '$ville',
+      },
+      {
+        $match: {
+          $and: matchConditions // Apply all filters
+        }
+      },
+      {
+        $lookup: {
+          from: 'voyageurs',
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements',
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $unwind: {
+          path: '$voyageurs',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          Num_Reservation: { $first: '$Num_Reservation' },
+          Date_Reservation: { $first: '$Date_Reservation' },
+          nbr_place: { $first: '$nbr_place' },
+          Status: { $first: '$Status' },
+          volDate: { $first: '$vol.Date_depart' },
+          circuitName: { $first: '$circuit.Nom' },
+          circuitPrice: { $first: '$circuit.Prix' },
+          villeName: { $first: '$ville.Nom' },
+          voyageurEmails: { $push: '$voyageurs.email' },
+          paiement: { $first: { $arrayElemAt: ['$paiement', 0] } }
+        },
+      },
+      {
+        $addFields: {
+          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          volDate: 1,
+          nbr_place: 1,
+          Status: 1,
+          circuitName: 1,
+          villeName: 1,
+          voyageurEmails: 1,
+          totalPrice: 1,
+          paiementStatus: '$paiement.statut'
+        }
+      }
+    ];
+
+    const reservations = await reservation.aggregate(pipeline);
+    res.status(200).json(reservations);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+/*// Get reservations grouped by circuit for a specific ville
 router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
   try {
     const { villeName } = req.params;
@@ -329,7 +926,7 @@ router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
-});
+});*/
 
 // avoir reservation by id 
     router.get('/getbyid/:id', async (req, res) => {
@@ -347,38 +944,46 @@ router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
 
 
     router.get('/getByVilleName/:villeName', async (req, res) => {
-        try {
-          const { villeName } = req.params;
-      
-          // Step 1: Find the ville by name
-          const ville = await Ville.findOne({ Nom: villeName });
-          if (!ville) {
-            return res.status(404).json({ error: 'Ville not found' });
-          }
-      
-          // Step 2: Find all circuits associated with the ville
-          const circuits = await Circuit.find({ villeId: ville._id });
-          if (!circuits || circuits.length === 0) {
-            return res.status(200).json(null);
-          }
-      
-          // Step 3: Find all vols associated with the circuits
-          const circuitIds = circuits.map((circuit) => circuit._id);
-          const vols = await vol.find({ circuitId: { $in: circuitIds } });
-          if (!vols || vols.length === 0) {
-            return res.status(200).json(null);
-          }
-      
-          // Step 4: Find all reservations associated with the vols
-          const volIds = vols.map((vol) => vol._id);
-          const reservations = await reservation.find({ volId: { $in: volIds } });
-      
-          // Return the reservations
-          res.status(200).json(reservations);
-        } catch (error) {
-          res.status(400).json({ error: error.message });
+      try {
+        const { villeName } = req.params;
+    
+        // Calculate date 365 days ago from now
+        const date365DaysAgo = new Date();
+        date365DaysAgo.setDate(date365DaysAgo.getDate() - 365);
+    
+        // Step 1: Find the ville by name
+        const ville = await Ville.findOne({ Nom: villeName });
+        if (!ville) {
+          return res.status(404).json({ error: 'Ville not found' });
         }
-      });
+    
+        // Step 2: Find all circuits associated with the ville
+        const circuits = await Circuit.find({ villeId: ville._id });
+        if (!circuits || circuits.length === 0) {
+          return res.status(200).json(null);
+        }
+    
+        // Step 3: Find all vols associated with the circuits
+        const circuitIds = circuits.map((circuit) => circuit._id);
+        const vols = await vol.find({ circuitId: { $in: circuitIds } });
+        if (!vols || vols.length === 0) {
+          return res.status(200).json(null);
+        }
+    
+        // Step 4: Find all reservations associated with the vols from the last 365 days
+        const volIds = vols.map((vol) => vol._id);
+        const reservations = await reservation.find({
+          volId: { $in: volIds },
+          Date_Reservation: { $gte: date365DaysAgo },
+          Status : "confirmé" 
+        }) // Optional: populate voyageurs if needed
+    
+        // Return the reservations
+        res.status(200).json(reservations);
+      } catch (error) {
+        res.status(400).json({ error: error.message });
+      }
+    });
 
 // mise a jour de reservation by id
 router.put('/putReservation', async (req, res) => {
@@ -397,6 +1002,30 @@ router.put('/putReservation', async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
+});
+
+
+
+// Add this new endpoint
+router.patch('/updateReservationStatus/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const updatedReservation = await reservation.findByIdAndUpdate(
+      id,
+      { Status: status },
+      { new: true }
+    );
+    
+    if (!updatedReservation) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+    
+    res.status(200).json(updatedReservation);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 

@@ -9,7 +9,7 @@ const reservation = require('../models/reservation'); // Ensure this is the corr
 router.post('/addVoyageur', async (req, res) => {
     try {
         const data = req.body;
-        const { reservationId, Nom, prenom, poids } = data;
+        const { reservationId, Nom, prenom, poids ,email} = data;
 
         // Check if the reservation exists
         const existingReservation = await reservation.findById(reservationId); // Ensure it's the correct model and field name
@@ -23,6 +23,7 @@ router.post('/addVoyageur', async (req, res) => {
             prenom,
             poids,
             reservation: reservationId,  // Reference to the reservation
+            email,
         });
 
         const savedVoyageur = await newVoyageur.save();

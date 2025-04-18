@@ -103,19 +103,52 @@ router.put('/update/:id', upload.single('photo'), async (req, res) => {
       res.status(500).json({ error: "Erreur serveur" });
     }
   });
+
+
+
+  router.put('/updateStatus/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { Status } = req.body;
   
-/* Obtenir toutes les adresses
-router.post('/add', async (req, res) => {
-    const data= req.body;
-        try {
-            const newAppareil = new Appareil(data);
-    
-            const savedAppareil = await newAppareil.save();
-            res.status(201).json(savedAppareil);
-        } catch (err) {
-            res.status(400).json({ message: err.message });
+      // Find the appareil by ID
+      const appareil = await Appareil.findById(id);
+      if (!appareil) {
+        return res.status(404).json({ error: "Appareil non trouvé" });
+      }
+  
+      // Update the appareil details
+     
+      appareil.status = Status || appareil.status;
+  
+      // Save the updated appareil
+      await appareil.save();
+  
+      res.status(200).json({ message: "Status updated successfully", appareil });
+    } catch (error) {
+      console.error("Error updating Status:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  });
+  
+
+  router.delete('/delete/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Find and delete the appareil
+        const deletedAppareil = await Appareil.findByIdAndDelete(id);
+        
+        if (!deletedAppareil) {
+            return res.status(404).json({ error: "Appareil non trouvé" });
         }
-});*/
+
+        res.status(200).json({ message: "Appareil supprimé avec succès" });
+    } catch (error) {
+        console.error("Error deleting appareil:", error);
+        res.status(500).json({ error: "Erreur serveur" });
+    }
+});
 
 router.get('/getAll', async (req, res) => {
     try {

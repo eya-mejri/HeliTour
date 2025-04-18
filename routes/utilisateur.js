@@ -52,10 +52,10 @@ router.get('/userInfo', verifyToken, async (req, res) => {
             return res.status(404).send("Utilisateur non trouvé");
         }
 
-        // Populate Adresse and Role fields
+        // Populate Adresse and Role fields, but only fetch the 'Nom' field for Role
         const userInfo = await Utilisateur.findById(usr._id)
             .populate('Adresse')
-            .populate('Role')
+            .populate('Role', 'Nom') // Only fetch the 'Nom' field for Role
             .exec();
 
         res.status(200).json(userInfo);
@@ -108,7 +108,64 @@ router.post('/register', async (req, res) => {
         }
     }
 })
+router.get('/getAllUsersWithDetails', async (req, res) => {
+    try {
+        const { Email } = req.query; // Get email from query parameters
+        
+        let query = Utilisateur.find()
+            .populate('Role', 'Nom')
+            .populate('Adresse')
+            .select('-MDP');
 
+        // If email parameter exists, add it to the query
+        if (Email) {
+            query = query.where('Email').equals(Email);
+        }
+
+        const users = await query.exec();
+        
+        res.status(200).json(users);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ 
+            message: 'Server error while fetching users',
+            error: error.message 
+        });
+    }
+});
+
+router.get('/getAdminUsersWithDetails', async (req, res) => {
+    try {
+        const { Email } = req.query;
+        
+        // First find the Admin role
+        const adminRole = await Role.findOne({ Nom: 'Admin' });
+        
+        if (!adminRole) {
+            return res.status(404).json({ message: 'Admin role not found' });
+        }
+
+        let query = Utilisateur.find({ Role: adminRole._id })
+            .populate('Role', 'Nom')
+            .populate('Adresse')
+            .select('-MDP');
+
+        // Add email filter if provided
+        if (Email) {
+            query = query.where('Email').equals(Email);
+        }
+
+        const users = await query.exec();
+        
+        res.status(200).json(users);
+    } catch (error) {
+        console.error('Error fetching admin users:', error);
+        res.status(500).json({ 
+            message: 'Server error while fetching admin users',
+            error: error.message 
+        });
+    }
+});
 //register for admin (Admin)
 router.post('/registerAdmin',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     const { Nom, Prenom, Email, Num_Telephone, AdresseData } = req.body;
@@ -240,7 +297,27 @@ router.get('/getbyid/:id', verifyToken,authorizeRoles('Admin'), async (req, res)
     }
 });
 
+router.put('/updateProfile', verifyToken, async (req, res) => {
+    try {
+        const { Nom, Prenom, Email, Num_Telephone, Adresse } = req.body;
+        const userId = req.Utilisateur._id;
 
+        // Update the user's basic information
+        const updatedUser = await Utilisateur.findByIdAndUpdate(
+            userId,
+            { Nom, Prenom, Email, Num_Telephone, Adresse },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).send("Utilisateur non trouvé");
+        }
+
+        res.status(200).json(updatedUser);
+    } catch (err) {
+        res.status(500).send('Erreur serveur');
+    }
+});
 //update user (user itself or admin)
 router.put('/putuser', async (req, res) => {
     try {

@@ -16,9 +16,9 @@ const reservation = mongoose .model('reservation' , {
         required: true,
         enum: [1,2,3]     
     },
-    Disponibilite: {
-        type: Boolean,
-        default:true
+    Status: {
+        type: String,
+        enum: ["confirmé","annulé","en attente"]
     },voyageurs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Voyageur' }],
 
     // Reference to a single vol (Many reservations can belong to one vol)

@@ -15,7 +15,14 @@ const appareilSchema = new mongoose.Schema({
     description: { 
         type: String, 
         required: true 
-    }
+    },
+    status: { 
+        type: String, 
+        required: true ,
+        enum: ["active","inactive"] ,
+        default:"active"
+    },
+
 });
 
 module.exports = mongoose.model('Appareil', appareilSchema);

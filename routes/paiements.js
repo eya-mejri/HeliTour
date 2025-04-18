@@ -35,7 +35,68 @@ router.get('/getAllPaiements', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+router.get('/getPaymentSummary', async (req, res) => {
+    try {
+      const now = new Date();
+      
+      // Current period (last 30 days)
+      const currentStart = new Date(now);
+      currentStart.setDate(currentStart.getDate() - 30);
+      
+      // Previous period (30-60 days ago)
+      const previousStart = new Date(currentStart);
+      previousStart.setDate(previousStart.getDate() - 30);
+  
+      // Get amounts for both periods (only successful payments)
+      const [currentResult, previousResult] = await Promise.all([
+        Paiement.aggregate([
+          { 
+            $match: { 
+              statut: "réussi",
+              date_paiement: { $gte: currentStart, $lte: now }
+            } 
+          },
+          { $group: { _id: null, total: { $sum: "$montant" } } }
+        ]),
+        Paiement.aggregate([
+          { 
+            $match: { 
+              statut: "réussi",
+              date_paiement: { $gte: previousStart, $lte: currentStart }
+            } 
+          },
+          { $group: { _id: null, total: { $sum: "$montant" } } }
+        ])
+      ]);
+  
+      // Extract totals (default to 0 if no results)
+      const currentAmount = currentResult[0]?.total || 0;
+      const previousAmount = previousResult[0]?.total || 0;
+  
+      // Calculate percentage change
+      let percentageChange = "0.00";
+      if (previousAmount > 0) {
+        percentageChange = (((currentAmount - previousAmount) / previousAmount) * 100).toFixed(2);
+      } else if (currentAmount > 0) {
+        percentageChange = "100.00"; // No previous amount but current exists
+      }
+  
+      res.status(200).json({
+        currentMonthAmount: currentAmount,
+        previousMonthAmount: previousAmount,
+        percentageChange
+      });
+  
+    } catch (error) {
+      console.error('Payment summary error:', error);
+      res.status(500).json({ 
+        error: 'Server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  });
 
+  
 router.get('/getPaiementById/:id', async (req, res) => {
     try {
         const { id } = req.params;
