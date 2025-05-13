@@ -207,5 +207,14 @@ router.put('/updatePaiement/:id', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+router.delete('/deleteAll', async (req, res) => {
+    try {
+        const result = await Paiement.deleteMany({});
+        res.status(200).json({ message: `${result.deletedCount} paiement  supprimées.` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+  });
+  
 
 module.exports = router;

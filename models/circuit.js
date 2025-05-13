@@ -22,7 +22,10 @@ const circuit = mongoose .model('circuit' , {
             type: mongoose.Schema.Types.ObjectId,
             ref: "ville",  
             required: true
-        }
+    },
+    photos:[{ 
+        type: String
+    }]
     
 })
 

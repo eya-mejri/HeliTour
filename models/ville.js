@@ -11,7 +11,9 @@ const ville = mongoose .model('ville' , {
         required: true 
     },
     circuits: [{ type: mongoose.Schema.Types.ObjectId, ref: 'circuit' }],
-   
+    photos:[{ 
+        type: String
+    }]
     
 
     

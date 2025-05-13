@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
 });
 
 // Obtenir une adresse par son ID
-router.get('/:id', async (req, res) => {
+router.get('/get/:id', async (req, res) => {
     try {
         const adresse = await Adresse.findById(req.params.id);
         if (!adresse) return res.status(404).json({ message: "Adresse non trouvée" });
@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
 });
 
 // Mettre à jour une adresse
-router.put('/:id', async (req, res) => {
+router.put('/update/:id', async (req, res) => {
     try {
         const adresse = await Adresse.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!adresse) return res.status(404).json({ message: "Adresse non trouvée" });
@@ -59,11 +59,20 @@ router.put('/:id', async (req, res) => {
 });
 
 // Supprimer une adresse
-router.delete('/:id', async (req, res) => {
+router.delete('supprimer/:id', async (req, res) => {
     try {
         const adresse = await Adresse.findByIdAndDelete(req.params.id);
         if (!adresse) return res.status(404).json({ message: "Adresse non trouvée" });
         res.json({ message: 'Adresse supprimée' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+// Supprimer toutes les adresses
+router.delete('/deleteAll', async (req, res) => {
+    try {
+        const result = await Adresse.deleteMany({});
+        res.json({ message: `${result.deletedCount} adresses supprimées.` });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

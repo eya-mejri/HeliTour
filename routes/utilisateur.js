@@ -314,7 +314,7 @@ router.put('/updateProfile', verifyToken, async (req, res) => {
         }
 
         res.status(200).json(updatedUser);
-    } catch (err) {
+    } catch (err) { 
         res.status(500).send('Erreur serveur');
     }
 });

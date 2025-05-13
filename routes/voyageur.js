@@ -9,7 +9,7 @@ const reservation = require('../models/reservation'); // Ensure this is the corr
 router.post('/addVoyageur', async (req, res) => {
     try {
         const data = req.body;
-        const { reservationId, Nom, prenom, poids ,email} = data;
+        const { reservationId, Nom, prenom, poids ,email,phone} = data;
 
         // Check if the reservation exists
         const existingReservation = await reservation.findById(reservationId); // Ensure it's the correct model and field name
@@ -24,6 +24,7 @@ router.post('/addVoyageur', async (req, res) => {
             poids,
             reservation: reservationId,  // Reference to the reservation
             email,
+            phone,
         });
 
         const savedVoyageur = await newVoyageur.save();
@@ -38,5 +39,14 @@ router.post('/addVoyageur', async (req, res) => {
     }
 });
 
+// Supprimer toutes les villes
+router.delete('/deleteAll', async (req, res) => {
+    try {
+        const result = await voyageur.deleteMany({});
+        res.status(200).json({ message: `${result.deletedCount} voyageurs supprimées.` });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 module.exports=router;

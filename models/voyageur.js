@@ -16,6 +16,8 @@ const voyageur = mongoose .model('voyageur' , {
     },
     reservation: { type: mongoose.Schema.Types.ObjectId, ref: 'Reservation', required: true }
    ,email:{type:String}
+   ,phone:{type:Number}
+
 
     
 })

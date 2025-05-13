@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express =require('express');
-
+const nodemailer = require('nodemailer');
+const mongoose = require('mongoose');
 
 const router=express.Router();
 const http = require('http');
@@ -11,13 +13,18 @@ const vol = require('../models/vol');
 const Ville = require('../models/ville');
 const Circuit = require('../models/circuit');
 const circuit = require('../models/circuit');
+const Utilisateur = require('../models/utlisateur');
+const Voyageur = require('../models/voyageur');
+const { sendEmail } = require('./emailService');
+const { sendWhatsApp } = require('./smsService');
+
 
 const socketIOClient = socketClient('http://localhost:3002'); 
 //AJOUTER Reservation
 
 router.post('/addReservation2', async (req, res) => {
   try {
-      const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId, Status } = req.body;
+      const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId, Status,Date_Reservation } = req.body;
 
       // 1. Check if reservation already exists
       if (await reservation.findOne({ Num_Reservation })) {
@@ -39,6 +46,7 @@ router.post('/addReservation2', async (req, res) => {
       // 3. Create and save the reservation
       const newReservation = await reservation.create({
           Num_Reservation,
+          Date_Reservation,
           nbr_place,
           disponibilite,
           volId: vol1._id,
@@ -444,6 +452,217 @@ router.get('/getReservationsWithDetails', async (req, res) => {
   }
 });
 
+router.get('/getReservationsWithDetailsByVoyageurEmail/:voyageurEmail', async (req, res) => {
+  try {
+    const voyageurEmail = req.params.voyageurEmail;
+    const { startDate, endDate, status } = req.query;
+
+    const matchConditions = [];
+
+    // Add filters only after voyageurs lookup
+    if (status) {
+      matchConditions.push({ Status: status });
+    }
+
+    if (startDate && endDate) {
+      matchConditions.push({
+        'vol.Date_depart': {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate),
+        },
+      });
+    }
+
+    // Always filter by voyageur email
+    matchConditions.push({
+      'voyageurs.email': { $regex: voyageurEmail, $options: 'i' },
+    });
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      { $unwind: '$vol' },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      { $unwind: '$circuit' },
+      {
+        $lookup: {
+          from: 'voyageurs',
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements',
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $unwind: {
+          path: '$voyageurs',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match: {
+          $and: matchConditions,
+        },
+      },
+      {
+        $group: {
+          _id: '$_id',
+          Num_Reservation: { $first: '$Num_Reservation' },
+          Date_Reservation: { $first: '$Date_Reservation' },
+          nbr_place: { $first: '$nbr_place' },
+          Status: { $first: '$Status' },
+          volDate: { $first: '$vol.Date_depart' },
+          circuitName: { $first: '$circuit.Nom' },
+          circuitPrice: { $first: '$circuit.Prix' },
+          voyageurEmails: { $addToSet: '$voyageurs.email' },
+          paiement: { $first: { $arrayElemAt: ['$paiement', 0] } },
+        },
+      },
+      {
+        $addFields: {
+          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          volDate: 1,
+          nbr_place: 1,
+          Status: 1,
+          circuitName: 1,
+          voyageurEmails: 1,
+          totalPrice: 1,
+          paiementStatus: '$paiement.statut',
+        },
+      },
+    ];
+
+    const reservations = await reservation.aggregate(pipeline);
+    res.status(200).json(reservations);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+router.get('/reservationDetails/:id', async (req, res) => {
+  try {
+    const reservationId = req.params.id;
+
+    const pipeline = [
+      {
+        $match: { _id: new mongoose.Types.ObjectId(reservationId) }
+      },
+      {
+        $lookup: {
+          from: 'vols',
+          localField: 'volId',
+          foreignField: '_id',
+          as: 'vol',
+        },
+      },
+      { $unwind: '$vol' },
+      {
+        $lookup: {
+          from: 'circuits',
+          localField: 'vol.circuitId',
+          foreignField: '_id',
+          as: 'circuit',
+        },
+      },
+      { $unwind: '$circuit' },
+      {
+        $lookup: {
+          from: 'voyageurs',
+          localField: 'voyageurs',
+          foreignField: '_id',
+          as: 'voyageurs',
+        },
+      },
+      {
+        $lookup: {
+          from: 'paiements',
+          localField: '_id',
+          foreignField: 'reservation_id',
+          as: 'paiement',
+        },
+      },
+      {
+        $addFields: {
+          paiement: { $arrayElemAt: ['$paiement', 0] }, // get first paiement if any
+          totalPrice: { $multiply: ['$circuit.Prix', '$nbr_place'] }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          reservationId: '$_id',
+          Num_Reservation: 1,
+          Date_Reservation: 1,
+          nbr_place: 1,
+          Status: 1,
+          voyageurs: 1,
+          paiement: {
+            statut: '$paiement.statut',
+            date_paiement: '$paiement.date_paiement',
+            montant: '$paiement.montant',
+            method: '$paiement.method'
+          },
+          vol: {
+            Date_depart: '$vol.Date_depart',
+            Heure_depart: '$vol.Heure_depart',
+            Heure_arrive: '$vol.Heure_arrive',
+            lieu_depart: '$vol.lieu_depart',
+            lieu_arrive: '$vol.lieu_arrive'
+          },
+          circuit: {
+            Nom: '$circuit.Nom',
+            Description: '$circuit.Description',
+            Prix: '$circuit.Prix'
+          },
+          totalPrice: 1
+        }
+      }
+    ];
+
+    const result = await reservation.aggregate(pipeline);
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Reservation not found' });
+    }
+
+    res.status(200).json(result[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: error.message });
+  }
+});
 
 
 /*router.get('/getReservationsWithDetails', async (req, res) => {
@@ -1007,27 +1226,59 @@ router.put('/putReservation', async (req, res) => {
 
 
 // Add this new endpoint
-router.patch('/updateReservationStatus/:id', async (req, res) => {
+
+router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
   try {
-    const { id } = req.params;
+    const { numReservation } = req.params;
     const { status } = req.body;
-    
-    const updatedReservation = await reservation.findByIdAndUpdate(
-      id,
+
+    const updatedReservation = await reservation.findOneAndUpdate(
+      { Num_Reservation: numReservation },
       { Status: status },
       { new: true }
-    );
-    
+    ).populate({ path: 'voyageurs', model: 'voyageur' });
+
     if (!updatedReservation) {
       return res.status(404).json({ message: 'Reservation not found' });
     }
+
+    if (updatedReservation.voyageurs?.length > 0) {
+      const voyageur = updatedReservation.voyageurs[0]; // Pick the first one (or loop if needed)
     
+      if (voyageur.email) {
+        try {
+          await sendEmail(
+            voyageur.email,
+            `Statut de réservation mis à jour`,
+            `Bonjour ${voyageur.prenom} ${voyageur.Nom},
+    
+    Le statut de votre réservation ${updatedReservation.Num_Reservation} est maintenant : ${status.toUpperCase()}.
+    
+    Merci pour votre confiance.
+    
+    Cordialement,
+    Équipe HeliTour`
+          );
+          console.log(`✅ Email envoyé à ${voyageur.email}`);
+        } catch (emailErr) {
+          console.error(`❌ Échec d’envoi à ${voyageur.email}:`, emailErr.message);
+        }
+        await sendWhatsApp(
+          `+216${voyageur.phone}`, // replace with `voyageur.whatsapp`
+          `Bonjour ${voyageur.nom}, votre réservation (${reservation.Num_Reservation}) a été mise à jour. Nouveau statut: ${status}.`
+        );
+      } else {
+        console.warn("⚠️ Aucun email trouvé pour ce voyageur.");
+      }
+    }
+    
+
     res.status(200).json(updatedReservation);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("Erreur updateReservationStatus:", error);
+    res.status(500).json({ error: error.message });
   }
 });
-
 
 router.get('/getReservationAmount/:reservationId', async (req, res) => {
   try {
@@ -1062,7 +1313,87 @@ router.get('/getReservationAmount/:reservationId', async (req, res) => {
       res.status(500).json({ error: error.message });
   }
 });
+  
+router.get('/counts', async (req, res) => {
+  try {
+      const [
+          villeCount,
+          confirmedReservationCount,
+          userCount,
+          voyageurCount
+      ] = await Promise.all([
+          Ville.countDocuments(),
+          reservation.countDocuments({ Status: 'confirmé' }),
+          Utilisateur.countDocuments(),
+          Voyageur.countDocuments()
+      ]);
 
+      res.status(200).json({
+          villeCount,
+          confirmedReservationCount,
+          userCount,
+          voyageurCount
+      });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+router.post('/send-confirmation-email', async (req, res) => {
+  const { email, reservation,phone } = req.body;
 
+  if (!email || !reservation) {
+    return res.status(400).json({ error: 'Email and reservation data are required.' });
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,         // Use env variables in real projects
+        pass: process.env.EMAIL_PASS,       // Use an App Password if using Gmail
+      },
+    });
+
+    const mailOptions = {
+      from: '"Helitour Tunisia" <malekchallouf24@gmail.com>',
+      to: email,
+      subject: 'Your Helitour Booking Confirmation',
+      html: `
+        <h2>Reservation Confirmation</h2>
+        <p><strong>Reservation Number:</strong> ${reservation.Num_Reservation}</p>
+        <p><strong>Status:</strong> ${reservation.Status}</p>
+        <p><strong>Date:</strong> ${new Date(reservation.Date_Reservation).toLocaleString()}</p>
+        <p><strong>Total Price:</strong> DT ${reservation.totalPrice}</p>
+        <hr/>
+        <p>Thank you for choosing our service!</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    await sendWhatsApp(
+      `+216${phone}`, // replace with `voyageur.whatsapp`
+      `Your Helitour Booking Confirmation - Bonjour, Reservation Confirmation
+        Reservation Number: ${reservation.Num_Reservation}
+        Status: ${reservation.Status}
+        Date: ${new Date(reservation.Date_Reservation).toLocaleString()}
+        Total Price: DT ${reservation.totalPrice}
+        
+        Thank you for choosing our service!`
+    );
+    res.status(200).json({ message: 'Confirmation email sent.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to send confirmation email.' });
+  }
+});
+// Supprimer toutes les villes
+router.delete('/deleteAll', async (req, res) => {
+  try {
+      const result = await reservation.deleteMany({});
+      res.status(200).json({ message: `${result.deletedCount} reservations supprimées.` });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports=router;

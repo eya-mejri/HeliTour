@@ -26,7 +26,10 @@ const reservation = mongoose .model('reservation' , {
         type: mongoose.Schema.Types.ObjectId,
         ref: "vol",  // Reference to the Vol model
         required: true
-    }
+    },reminderSent: {
+        type: Boolean,
+        default: false
+      }
     
 
     

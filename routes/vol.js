@@ -1,4 +1,6 @@
 const express =require('express');
+const mongoose = require('mongoose');
+
 const verifyToken=require('../middlewares/verifyToken');
 const authorizeRoles=require('../middlewares/roleMiddleware');
 const moment = require('moment');
@@ -8,7 +10,13 @@ const { diff } = require('deep-diff');
 const router=express.Router();
 const vol = require('../models/vol');
 const circuit = require('../models/circuit');
+const voyageur = require('../models/voyageur');
+const { sendEmail } = require('./emailService'); // Adjust path if needed
+const { sendWhatsApp } = require('./smsService');
 
+
+mongoose.model('Voyageur', mongoose.model('voyageur').schema);
+mongoose.model('Circuit', mongoose.model('circuit').schema);
 
 
 //AJOUTER vol (admin)
@@ -129,6 +137,44 @@ router.get('/circuit-date/:circuitId/:date', async (req, res) => {
         });
     }
 });
+
+
+// GET /vol/available/:circuitId/:date/:places
+router.get('/available/:circuitId/:date/:places', async (req, res) => {
+    try {
+        const { circuitId, date, places } = req.params;
+        
+        // Validate date format
+        if (!moment(date, 'YYYY-MM-DD', true).isValid()) {
+            return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+        }
+
+        const startOfDay = moment(date).startOf('day').toDate();
+        const endOfDay = moment(date).endOf('day').toDate();
+        
+        const vols = await vol.find({
+            circuitId: circuitId,
+            Date_depart: {
+                $gte: startOfDay,
+                $lte: endOfDay
+            },
+            status: "confirmé", // Only confirmed vols
+            place_disponible: { $gte: Number(places) } // Must have enough places
+        }).select('Date_depart place_disponible');
+
+        res.json(vols);
+    } catch (error) {
+        console.error('Error fetching available flights:', error);
+        res.status(500).json({ 
+            message: 'Server error',
+            error: error.message 
+        });
+    }
+});
+
+
+
+
 // get by id
 router.get('/getbyid/:id', async (req, res) => {
     try {
@@ -318,36 +364,28 @@ router.get('/getlast', async (req, res) => {
     }
 });*/
 // Email setup
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+
   
   // Field name mappings for friendly display
   const FIELD_NAMES = {
-    'Duree': 'Durée du vol (minutes)',
-    'Date_depart': 'Date et heure de départ',
-    'place_disponible': 'Places disponibles',
-    'status': 'Statut du vol',
-    'circuitId': 'Circuit'
+    Duree: 'Durée',
+    Date_depart: 'Date de départ',
+    place_disponible: 'Places disponibles',
+    status: 'Statut',
+    circuitId: 'Circuit'
   };
   
-  // Format values for display
-  const formatValue = (value, field) => {
-    if (field === 'Date_depart') {
-      return new Date(value).toLocaleString();
+  const formatValue = (val, field) => {
+    if (!val) return '-';
+    if (field.toLowerCase().includes('date')) {
+      return new Date(val).toLocaleString();
     }
-    if (field === 'circuitId' && typeof value === 'object') {
-      return value.Nom; // Assuming Circuit has a Nom field
-    }
-    return value;
+    if (typeof val === 'object') return val.toString();
+    return val;
   };
   
   // Update flight endpoint
-  router.put('/putVol', async (req, res) => {
+  /*router.put('/putVol', async (req, res) => {
     try {
       const { _id } = req.body;
       
@@ -428,8 +466,136 @@ const transporter = nodemailer.createTransport({
       console.error('Update error:', error);
       res.status(400).json({ error: error.message });
     }
+  });*/
+
+
+
+// ✅ PUT /putVol
+router.put('/putVol', async (req, res) => {
+    try {
+      const { _id } = req.body;
+      if (!_id) return res.status(400).json({ error: "Missing vol ID." });
+  
+      // 1. Fetch previous version of the vol
+      const previousVol = await vol.findById(_id)
+        .populate('circuitId')
+        .populate({
+          path: 'reservations',
+          populate: {
+            path: 'voyageurs',
+            model: 'Voyageur'
+          }
+        });
+  
+      if (!previousVol) {
+        return res.status(404).json({ error: "Vol non trouvé" });
+      }
+  
+      // 2. Update with new data
+      const updatedVol = await vol.findOneAndUpdate(
+        { _id },
+        req.body,
+        { new: true }
+      ).populate('circuitId');
+  
+      // 3. Detect differences
+      const changes = diff(
+        previousVol.toObject({ virtuals: true }),
+        updatedVol.toObject({ virtuals: true })
+      );
+  console.log(updatedVol)
+      if (changes && changes.length > 0) {
+        const changeDetails = changes
+          .filter(change => change.kind === 'E')
+          .map(change => ({
+            field: change.path[0],
+            from: formatValue(change.lhs, change.path[0]),
+            to: formatValue(change.rhs, change.path[0])
+          }));
+  
+        // 4. Notify voyageurs
+        if (changeDetails.length > 0) {
+          for (const reservation of previousVol.reservations || []) {
+            for (const voyageur of reservation.voyageurs || []) {
+              const message = 
+                `Modification de votre vol ${updatedVol.circuitId.Nom}\n\n` +
+                `Bonjour ${voyageur.prenom} ${voyageur.Nom},\n\n` +
+                `Votre vol a été modifié. Voici les changements :\n` +
+                `${changeDetails.map(change =>
+                  `- ${FIELD_NAMES[change.field] || change.field}: ${change.from} → ${change.to}`
+                ).join('\n')}\n\n` +
+                `Veuillez vérifier ces modifications dans votre espace client.\n\n` +
+                `Cordialement,\nÉquipe de réservation`;
+  
+              try {
+                if (voyageur.email) {
+                  await sendEmail(
+                    voyageur.email,
+                    `Modification de votre vol ${updatedVol.circuitId.Nom}`,
+                    message
+                  );
+                }
+  
+                if (voyageur.phone) {
+                  await sendWhatsApp(`+216${voyageur.phone}`, message);
+                }
+              } catch (notifErr) {
+                console.error(`❌ Erreur d'envoi à ${voyageur.email || voyageur.phone}:`, notifErr.message);
+              }
+            }
+          }
+        }
+      }
+  
+      return res.status(200).json(updatedVol);
+    } catch (err) {
+      console.error('❌ Erreur dans PUT /putVol:', err);
+      return res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du vol.' });
+    }
   });
+  
 
+router.get('/new', async (req, res) => {
+    const { circuitId, date, places } = req.query;
+    const vols = await vol.find({
+        circuitId,
+        Date_depart: {
+            $gte: new Date(new Date(date).setHours(0, 0, 0)),
+            $lte: new Date(new Date(date).setHours(23, 59, 59))
+        },
+        place_disponible: { $gte: parseInt(places) }
+    });
+    res.json(vols);
+});
 
+// GET price of circuit by vol ID
+router.get('/price/:volId', async (req, res) => {
+  try {
+    const volId = req.params.volId;
+
+    // Populate the related circuit
+    const volDoc = await vol.findById(volId).populate('circuitId');
+
+    if (!volDoc || !volDoc.circuitId) {
+      return res.status(404).json({ error: 'Vol or related circuit not found' });
+    }
+
+    const price = volDoc.circuitId.Prix;
+    res.json({ prix: price });
+  } catch (error) {
+    console.error('Error fetching price by volId:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Supprimer toutes les villes
+router.delete('/deleteAll', async (req, res) => {
+  try {
+      const result = await vol.deleteMany({});
+      res.status(200).json({ message: `${result.deletedCount} vols supprimées.` });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports=router;
