@@ -45,7 +45,7 @@ const storage = multer.diskStorage({
       res.status(400).json({ message: err.message });
     }
   });
-
+// get appareil by id
   router.get('/getbyid/:id', async (req, res) => {
     try {
         const { id } = req.params;

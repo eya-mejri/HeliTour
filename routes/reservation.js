@@ -18,7 +18,6 @@ const Voyageur = require('../models/voyageur');
 const { sendEmail } = require('./emailService');
 const { sendWhatsApp } = require('./smsService');
 
-
 const socketIOClient = socketClient('http://localhost:3002'); 
 //AJOUTER Reservation
 
@@ -242,96 +241,7 @@ router.get('/bookingAnalytics30Days', async (req, res) => {
   }
 });
 
-/*router.get('/getReservationsWithDetails', async (req, res) => {
-  try {
-    const reservations = await reservation.aggregate([
-      {
-        $lookup: {
-          from: 'vols', // Join with the vol collection
-          localField: 'volId',
-          foreignField: '_id',
-          as: 'vol',
-        },
-      },
-      {
-        $unwind: '$vol', // Unwind the vol array
-      },
-      {
-        $lookup: {
-          from: 'circuits', // Join with the circuit collection
-          localField: 'vol.circuitId',
-          foreignField: '_id',
-          as: 'circuit',
-        },
-      },
-      {
-        $unwind: '$circuit', // Unwind the circuit array
-      },
-      {
-        $lookup: {
-          from: 'voyageurs', // Join with the voyageur collection
-          localField: 'voyageurs',
-          foreignField: '_id',
-          as: 'voyageurs',
-        },
-      },
-      {
-        $lookup: {
-          from: 'paiements', // Join with the paiement collection
-          localField: '_id',
-          foreignField: 'reservation_id',
-          as: 'paiement',
-        },
-      },
-      {
-        $unwind: {
-          path: '$voyageurs',
-          preserveNullAndEmptyArrays: true // Handle cases where voyageurs might be empty
-        }
-      },
-      {
-        $group: {
-          _id: '$_id', // Group by reservation ID
-          Num_Reservation: { $first: '$Num_Reservation' },
-          Date_Reservation: { $first: '$Date_Reservation' },
-          nbr_place: { $first: '$nbr_place' },
-          Status: { $first: '$Status' },
-          volDate: { $first: '$vol.Date_depart' },
-          circuitName: { $first: '$circuit.Nom' },
-          circuitPrice: { $first: '$circuit.Prix' },
-          voyageurEmails: { $push: '$voyageurs.email' }, // Collect all voyageur emails
-          paiement: { $first: { $arrayElemAt: ['$paiement', 0] } }, // Get first payment if exists
-        },
-      },
-      {
-        $addFields: {
-          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] } // Calculate total price
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          reservationId: '$_id',
-          Num_Reservation: 1,
-          Date_Reservation: 1,
-          volDate: 1,
-          nbr_place: 1,
-          Status: 1,
-          circuitName: 1,
-          voyageurEmails: 1,
-          totalPrice: 1,
-          paiementStatus: '$paiement.statut' // Include payment status if needed
-        }
-      }
-    ]);
-
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});*/
-
-
+// table of boukings
 router.get('/getReservationsWithDetails', async (req, res) => {
   try {
     const { startDate, endDate, status, searchEmail } = req.query;
@@ -451,7 +361,7 @@ router.get('/getReservationsWithDetails', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-
+//my bookings
 router.get('/getReservationsWithDetailsByVoyageurEmail/:voyageurEmail', async (req, res) => {
   try {
     const voyageurEmail = req.params.voyageurEmail;
@@ -570,7 +480,7 @@ router.get('/getReservationsWithDetailsByVoyageurEmail/:voyageurEmail', async (r
 
 
 
-
+//reservation confirmation
 router.get('/reservationDetails/:id', async (req, res) => {
   try {
     const reservationId = req.params.id;
@@ -665,286 +575,8 @@ router.get('/reservationDetails/:id', async (req, res) => {
 });
 
 
-/*router.get('/getReservationsWithDetails', async (req, res) => {
-  try {
-    const reservations = await reservation.aggregate([
-      {
-        $lookup: {
-          from: 'vols', // Join with the vol collection
-          localField: 'volId',
-          foreignField: '_id',
-          as: 'vol',
-        },
-      },
-      {
-        $unwind: '$vol', // Unwind the vol array (since $lookup returns an array)
-      },
-      {
-        $lookup: {
-          from: 'circuits', // Join with the circuit collection
-          localField: 'vol.circuitId',
-          foreignField: '_id',
-          as: 'circuit',
-        },
-      },
-      {
-        $unwind: '$circuit', // Unwind the circuit array
-      },
-      {
-        $lookup: {
-          from: 'voyageurs', // Join with the voyageur collection
-          localField: 'voyageurs',
-          foreignField: '_id',
-          as: 'voyageurs',
-        },
-      },
-      {
-        $lookup: {
-          from: 'paiements', // Join with the paiement collection
-          localField: '_id',
-          foreignField: 'reservation_id',
-          as: 'paiement',
-        },
-      },
-      {
-        $group: {
-          _id: '$_id', // Group by reservation ID
-          Num_Reservation: { $first: '$Num_Reservation' }, // Include reservation ID
-          reservationDate: { $first: '$Date_Reservation' }, // Include reservation date
-          volDate: { $first: '$vol.Date_depart' }, // Include vol date
-          numberOfVoyageurs: { $first: { $size: '$voyageurs' } }, // Count the number of voyageurs
-          circuitName: { $first: '$circuit.Nom' }, // Include circuit name
-          reservationStatus: { $first: '$vol.status' }, // Include reservation status
-          paiement: { $push: '$paiement' }, // Aggregate paiement records into an array
-        },
-      },
-      {
-        $project: {
-          _id: 0, // Exclude the default _id field
-          reservationId: '$_id', // Include reservation ID
-          Num_Reservation: 1, // Include reservation ID
-          reservationDate: 1, // Include reservation date
-          volDate: 1, // Include vol date
-          numberOfVoyageurs: 1, // Include number of voyageurs
-          circuitName: 1, // Include circuit name
-          reservationStatus: 1, // Include reservation status
-          paiement: 1, // Include paiement details
-        },
-      },
-    ]);
 
-    
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});*/
-/*router.get('/getReservationsByVille/:villeName', async (req, res) => {
-  try {
-    const { villeName } = req.params;
-    
-    // Calculate date 365 days ago from now
-    const date365DaysAgo = new Date();
-    date365DaysAgo.setDate(date365DaysAgo.getDate() - 365);
-
-    const reservations = await reservation.aggregate([
-      {
-        $match: {
-          Date_Reservation: { $gte: date365DaysAgo },
-          Status : "confirmé"
-        }
-      },
-      {
-        $lookup: {
-          from: 'vols',
-          localField: 'volId',
-          foreignField: '_id',
-          as: 'vol',
-        },
-      },
-      {
-        $unwind: '$vol',
-      },
-      {
-        $lookup: {
-          from: 'circuits',
-          localField: 'vol.circuitId',
-          foreignField: '_id',
-          as: 'circuit',
-        },
-      },
-      {
-        $unwind: '$circuit',
-      },
-      {
-        $lookup: {
-          from: 'villes',
-          localField: 'circuit.villeId',
-          foreignField: '_id',
-          as: 'ville',
-        },
-      },
-      {
-        $unwind: '$ville',
-      },
-      {
-        $match: {
-          'ville.Nom': villeName,
-        },
-      },
-      {
-        $lookup: {
-          from: 'voyageurs',
-          localField: 'voyageurs',
-          foreignField: '_id',
-          as: 'voyageurs',
-        },
-      },
-      {
-        $lookup: {
-          from: 'paiements',
-          localField: '_id',
-          foreignField: 'reservation_id',
-          as: 'paiement',
-        },
-      },
-      {
-        $group: {
-          _id: '$_id',
-          Num_Reservation: { $first: '$Num_Reservation' },
-          reservationDate: { $first: '$Date_Reservation' },
-          volDate: { $first: '$vol.Date_depart' },
-          numberOfVoyageurs: { $first: { $size: '$voyageurs' } },
-          circuitName: { $first: '$circuit.Nom' },
-          reservationStatus: { $first: '$Status' }, // Changed from vol.status to reservation.Status
-          paiement: { $push: '$paiement' },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          reservationId: '$_id',
-          Num_Reservation: 1,
-          reservationDate: 1,
-          volDate: 1,
-          numberOfVoyageurs: 1,
-          circuitName: 1,
-          reservationStatus: 1,
-          paiement: 1,
-        },
-      },
-    ]);
-
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-*/
-
-
-
-/*router.get('/getReservationsByVille/:villeName', async (req, res) => {
-  try {
-    const { villeName } = req.params;
-
-    const reservations = await reservation.aggregate([
-      {
-        $lookup: {
-          from: 'vols',
-          localField: 'volId',
-          foreignField: '_id',
-          as: 'vol',
-        },
-      },
-      {
-        $unwind: '$vol',
-      },
-      {
-        $lookup: {
-          from: 'circuits',
-          localField: 'vol.circuitId',
-          foreignField: '_id',
-          as: 'circuit',
-        },
-      },
-      {
-        $unwind: '$circuit',
-      },
-      {
-        $lookup: {
-          from: 'villes',
-          localField: 'circuit.villeId',
-          foreignField: '_id',
-          as: 'ville',
-        },
-      },
-      {
-        $unwind: '$ville',
-      },
-      {
-        $match: {
-          'ville.Nom': villeName, // Filter by city name only
-        },
-      },
-      {
-        $lookup: {
-          from: 'voyageurs',
-          localField: 'voyageurs',
-          foreignField: '_id',
-          as: 'voyageurs',
-        },
-      },
-      {
-        $unwind: {
-          path: '$voyageurs',
-          preserveNullAndEmptyArrays: true
-        }
-      },
-      {
-        $group: {
-          _id: '$_id',
-          Num_Reservation: { $first: '$Num_Reservation' },
-          Date_Reservation: { $first: '$Date_Reservation' },
-          nbr_place: { $first: '$nbr_place' },
-          Status: { $first: '$Status' },
-          volDate: { $first: '$vol.Date_depart' },
-          circuitName: { $first: '$circuit.Nom' },
-          circuitPrice: { $first: '$circuit.prix' },
-          villeName: { $first: '$ville.Nom' },
-          voyageurEmails: { $push: '$voyageurs.email' },
-         
-        },
-      },
-      {
-        $addFields: {
-          totalPrice: { $multiply: ['$circuitPrice', '$nbr_place'] }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          reservationId: '$_id',
-          Num_Reservation: 1,
-          Date_Reservation: 1,
-          volDate: 1,
-          nbr_place: 1,
-          Status: 1,
-          circuitName: 1,
-          villeName: 1,
-          voyageurEmails: 1,
-          totalPrice: 1,
-          
-        }
-      }
-    ]);
-
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});*/
-
+// liste de reservation par ville
 router.get('/getReservationsByVille/:villeName', async (req, res) => {
   try {
     const { villeName } = req.params;
@@ -1088,64 +720,7 @@ router.get('/getReservationsByVille/:villeName', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
-/*// Get reservations grouped by circuit for a specific ville
-router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
-  try {
-    const { villeName } = req.params;
 
-    const reservations = await reservation.aggregate([
-      {
-        $lookup: {
-          from: 'vols',
-          localField: 'volId',
-          foreignField: '_id',
-          as: 'vol',
-        },
-      },
-      { $unwind: '$vol' },
-      {
-        $lookup: {
-          from: 'circuits',
-          localField: 'vol.circuitId',
-          foreignField: '_id',
-          as: 'circuit',
-        },
-      },
-      { $unwind: '$circuit' },
-      {
-        $lookup: {
-          from: 'villes',
-          localField: 'circuit.villeId',
-          foreignField: '_id',
-          as: 'ville',
-        },
-      },
-      { $unwind: '$ville' },
-      {
-        $match: {
-          'ville.Nom': villeName,
-        },
-      },
-      {
-        $group: {
-          _id: '$circuit.Nom', // Group by circuit name
-          count: { $sum: 1 }, // Count reservations for each circuit
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          circuitName: '$_id',
-          count: 1,
-        },
-      },
-    ]);
-
-    res.status(200).json(reservations);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});*/
 
 // avoir reservation by id 
     router.get('/getbyid/:id', async (req, res) => {
@@ -1161,7 +736,7 @@ router.get('/getReservationsByCircuit/:villeName', async (req, res) => {
         }
     });
 
-
+// chart : les statistiques des reservation par ville
     router.get('/getByVilleName/:villeName', async (req, res) => {
       try {
         const { villeName } = req.params;
@@ -1224,9 +799,7 @@ router.put('/putReservation', async (req, res) => {
 });
 
 
-
-// Add this new endpoint
-
+//admin update status of reservation and email send to voyageurs
 router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
   try {
     const { numReservation } = req.params;
@@ -1280,6 +853,7 @@ router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
   }
 });
 
+//avoir lle montant de la reservation
 router.get('/getReservationAmount/:reservationId', async (req, res) => {
   try {
       const reservationId = req.params.reservationId;
@@ -1314,6 +888,7 @@ router.get('/getReservationAmount/:reservationId', async (req, res) => {
   }
 });
   
+// avoir total de tout les tables
 router.get('/counts', async (req, res) => {
   try {
       const [
@@ -1338,13 +913,15 @@ router.get('/counts', async (req, res) => {
       res.status(500).json({ error: error.message });
   }
 });
+
+
 router.post('/send-confirmation-email', async (req, res) => {
   const { email, reservation,phone } = req.body;
 
   if (!email || !reservation) {
     return res.status(400).json({ error: 'Email and reservation data are required.' });
   }
-
+  
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
@@ -1361,9 +938,9 @@ router.post('/send-confirmation-email', async (req, res) => {
       html: `
         <h2>Reservation Confirmation</h2>
         <p><strong>Reservation Number:</strong> ${reservation.Num_Reservation}</p>
-        <p><strong>Status:</strong> ${reservation.Status}</p>
+        <p><strong>Status:</strong> ${reservation.status}</p>
         <p><strong>Date:</strong> ${new Date(reservation.Date_Reservation).toLocaleString()}</p>
-        <p><strong>Total Price:</strong> DT ${reservation.totalPrice}</p>
+        <p><strong>Total Price:</strong>  ${reservation.totalPrice} DT</p>
         <hr/>
         <p>Thank you for choosing our service!</p>
       `,

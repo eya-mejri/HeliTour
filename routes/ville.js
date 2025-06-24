@@ -17,7 +17,7 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const villeName = req.body.Nom.replace(/\s+/g, '_'); // Replace spaces with underscores
+        const villeName = req.body.Nom.replace(/\s+/g, '_'); 
         const fileExtension = path.extname(file.originalname);
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         const fileName = `${villeName}-${uniqueSuffix}${fileExtension}`;
@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage }).array('photos', 10); // Allow up to 10 photos
+const upload = multer({ storage }).array('photos', 10); 
 
 // AJOUTER Ville (admin) with photos
 router.post('/addVille', upload, async (req, res) => {
@@ -33,9 +33,8 @@ router.post('/addVille', upload, async (req, res) => {
         const { Nom, Description } = req.body;
         const photos = req.files ? req.files.map(file => file.filename) : [];
 
-        // Validate required fields
+       
         if (!Nom || !Description) {
-            // Clean up uploaded files if validation fails
             if (req.files) {
                 req.files.forEach(file => {
                     fs.unlinkSync(file.path);
@@ -44,18 +43,18 @@ router.post('/addVille', upload, async (req, res) => {
             return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
         }
 
-        // Create and save the ville
+        
         const newVille = new ville({
             Nom,
             Description,
-            photos, // Add the photo filenames to the ville
+            photos, 
             circuits: []
         });
 
         const savedVille = await newVille.save();
         res.status(201).json({ message: "Ville ajoutée avec succès", savedVille });
     } catch (error) {
-        // Clean up uploaded files if error occurs
+       
         if (req.files) {
             req.files.forEach(file => {
                 fs.unlinkSync(file.path);
@@ -94,7 +93,7 @@ router.get('/getall', async (req, res) => {
         res.status(400).json({ error: error.message})};
 });
 
-// avoir ville by id 
+// avoir ville by name
 router.get('/getByName/:nom', async (req, res) => {
     try {
         const { nom } = req.params;
@@ -123,22 +122,7 @@ router.get('/getbyid/:id', async (req, res) => {
 });
 
 
-// update ville by id 
-/*router.put('/updatebyid/:id', verifyToken,authorizeRoles('Admin'),async (req, res) => {
-    try {
-        const { id } = req.params;  
-        const dataToUpdate = req.body;  
-        const updatedVille = await ville.findOneAndUpdate({ _id :id}, dataToUpdate, { new: true });
 
-        if (!updatedVille) {
-            return res.status(404).json({ error: "ville non trouvé" });
-        }
-
-        res.status(200).json(updatedVille);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});*/
 router.put('/putVille', upload, async (req, res) => {
     try {
         const { _id, Nom, Description } = req.body;

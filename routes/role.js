@@ -24,6 +24,15 @@ router.get('/getbyid/:id',verifyToken,authorizeRoles('Admin'),  async (req, res)
         res.status(500).json({ message: err.message });
     }
 });
+router.get('/getAllRoles', async (req, res) => {
+    try {
+        const roles = await Role.find().select('_id Nom').exec();
+        res.json(roles);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
 
 // Créer un nouveau rôle
 router.post('/addRole',verifyToken,authorizeRoles('Admin'),  async (req, res) => {

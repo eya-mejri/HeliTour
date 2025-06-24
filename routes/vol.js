@@ -64,7 +64,7 @@ router.post('/addVol',/*verifyToken,authorizeRoles('Admin'), */async (req, res) 
 
 
 
-// a modifier de sort que lorsqu'on supp un vol , il va etre supprimer de la liste de circuit qu'il correspond 
+
 // supprimer vol par id (admin)
 router.delete('/deleteVol/:id',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
@@ -217,19 +217,6 @@ router.get('/getStatus/:Status', async (req, res) => {
     }
 });
 
-//get vol by day
-/*router.get('/getByDay/:Day', async (req, res) => {
-    try {
-        const { Day } = req.params;
-        const vol1 = await vol.find({Date_depart:Day});
-        if (!vol1) {
-            return res.status(404).json({ error: `pas de vol en  ${Day}` });
-        }
-        res.status(200).json(vol1);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});*/
 router.get('/vols/:year/:month/:day', async (req, res) => {
     const { year, month, day } = req.params;
 
@@ -256,7 +243,7 @@ router.get('/vols/:year/:month/:day', async (req, res) => {
 router.get('/getVolsToday', async (req, res) => {
     const now = new Date();
 
-    // Calculate the start of the day (00:00:00)
+   
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Calculate the end of the day (23:59:59.999)
@@ -345,25 +332,7 @@ router.get('/getlast', async (req, res) => {
     }
 });
 
-// mise a jour de vol by id
-/*router.put('/putVol',/*verifyToken,authorizeRoles('Admin'), async (req, res) => {
-    try {
-        const { _id } = req.body;  
-        const dataToUpdate = req.body;  
 
-        
-        const updatedVol = await vol.findOneAndUpdate({ _id }, dataToUpdate, { new: true });
-
-        if (!updatedVol) {
-            return res.status(404).json({ error: "circuit non trouvé" });
-        }
-
-        res.status(200).json(updatedVol);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});*/
-// Email setup
 
   
   // Field name mappings for friendly display
@@ -384,90 +353,7 @@ router.get('/getlast', async (req, res) => {
     return val;
   };
   
-  // Update flight endpoint
-  /*router.put('/putVol', async (req, res) => {
-    try {
-      const { _id } = req.body;
-      
-      // 1. Get previous flight data
-      const previousVol = await vol.findById(_id)
-        .populate('circuitId')
-        .populate({
-          path: 'reservations',
-          populate: {
-            path: 'voyageurs',
-            model: 'Voyageur'
-          }
-        });
   
-      if (!previousVol) {
-        return res.status(404).json({ error: "Vol non trouvé" });
-      }
-  
-      // 2. Update the flight
-      const updatedVol = await vol.findOneAndUpdate(
-        { _id },
-        req.body,
-        { new: true }
-      ).populate('circuitId');
-  
-      // 3. Detect changes
-      const changes = diff(
-        previousVol.toObject({ virtuals: true }),
-        updatedVol.toObject({ virtuals: true })
-      );
-  
-      if (changes && changes.length > 0) {
-        // 4. Prepare change details
-        const changeDetails = changes
-          .filter(change => change.kind === 'E') // Only edited fields
-          .map(change => ({
-            field: change.path[0],
-            from: formatValue(change.lhs, change.path[0]),
-            to: formatValue(change.rhs, change.path[0])
-          }));
-  
-        // 5. Notify all passengers if there are changes
-        if (changeDetails.length > 0) {
-          for (const reservation of previousVol.reservations) {
-            for (const voyageur of reservation.voyageurs) {
-              try {
-                await transporter.sendMail({
-                  from: process.env.EMAIL_USER,
-                  to: voyageur.email,
-                  subject: `Modification de votre vol ${updatedVol._id}`,
-                  html: `
-                    <h3>Bonjour ${voyageur.prenom} ${voyageur.Nom},</h3>
-                    <p>Votre vol a été modifié :</p>
-                    <ul>
-                      ${changeDetails.map(change => `
-                        <li>
-                          <strong>${FIELD_NAMES[change.field] || change.field}:</strong><br>
-                          Ancienne valeur: ${change.from}<br>
-                          Nouvelle valeur: ${change.to}
-                        </li>
-                      `).join('')}
-                    </ul>
-                    <p>Veuillez vérifier ces modifications sur notre plateforme.</p>
-                    <p>Cordialement,<br>Équipe de réservation</p>
-                  `
-                });
-                console.log(`Notification sent to ${voyageur.email}`);
-              } catch (emailError) {
-                console.error(`Failed to notify ${voyageur.email}:`, emailError);
-              }
-            }
-          }
-        }
-      }
-  
-      res.status(200).json(updatedVol);
-    } catch (error) {
-      console.error('Update error:', error);
-      res.status(400).json({ error: error.message });
-    }
-  });*/
-
 
 
 // ✅ PUT /putVol

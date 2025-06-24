@@ -1,6 +1,8 @@
+const axios = require('axios');
 const express = require('express');
 const router = express.Router();
 const Paiement = require('../models/paiements');
+const Reservation = require('../models/reservation');
 
 
 router.post('/addPaiement', async (req, res) => {
@@ -192,7 +194,7 @@ router.get('/getPaiementsOfThisMonth', async (req, res) => {
     }
 });
 
-router.put('/updatePaiement/:id', async (req, res) => {
+/*router.put('/updatePaiement/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const dataToUpdate = req.body;
@@ -206,7 +208,7 @@ router.put('/updatePaiement/:id', async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
-});
+});*/
 router.delete('/deleteAll', async (req, res) => {
     try {
         const result = await Paiement.deleteMany({});
@@ -215,6 +217,127 @@ router.delete('/deleteAll', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
   });
+
+
+
+
+const initiateFlouciPayment = async (req, res) => {
+  try {
+    const { amount, reservationId, customer_email, customer_phone } = req.body;
+    
+    // First create a payment record in our database
+    const newPayment = new Paiement({
+      reservation_id: reservationId,
+      montant: amount,
+      devise: 'TND',
+      statut: 'en_attente'
+    });
+    await newPayment.save();
+
+    // Initiate Flouci payment
+    const flouciResponse = await axios.post('https://developer.flouci.com/api/generate_payment', {
+      app_token: process.env.FLOUCI_APP_TOKEN,
+      app_secret: process.env.FLOUCI_APP_SECRET,
+      amount,
+      accept_card: true,
+      session_timeout_secs: 1200,
+      success_link: `${process.env.FRONTEND_URL}/payment/success`,
+      fail_link: `${process.env.FRONTEND_URL}/payment/fail`,
+      developer_tracking_id: newPayment._id.toString(), // Use our payment ID for tracking
+      customer_email,
+      customer_phone
+    });
+
+    // Update payment with Flouci reference
+    newPayment.flouci_payment_id = flouciResponse.data.payment_id;
+    await newPayment.save();
+
+    res.json({
+      payment_url: flouciResponse.data.payment_url,
+      payment_id: flouciResponse.data.payment_id,
+      our_payment_id: newPayment._id
+    });
+  } catch (error) {
+    console.error('Flouci initiation error:', error);
+    res.status(500).json({ error: 'Failed to initiate payment' });
+  }
+};
+
+const verifyFlouciPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    // First get our payment record
+    const payment = await Paiement.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    // Verify with Flouci
+    const flouciResponse = await axios.get(
+      `https://developer.flouci.com/api/verify_payment/${payment.flouci_payment_id}`
+    );
+
+    // Update payment status based on Flouci response
+    let newStatus = 'échoué';
+    if (flouciResponse.data.status === 'paid') {
+      newStatus = 'réussi';
+      
+      // Update reservation status
+      await Reservation.findByIdAndUpdate(payment.reservation_id, {
+        Status: 'confirmé'
+      });
+    }
+
+    payment.statut = newStatus;
+    payment.date_paiement = new Date();
+    await payment.save();
+
+    res.json({
+      status: newStatus,
+      reservation_id: payment.reservation_id
+    });
+  } catch (error) {
+    console.error('Flouci verification error:', error);
+    res.status(500).json({ error: 'Failed to verify payment' });
+  }
+};
+
+// Webhook handler for Flouci notifications
+const flouciWebhook = async (req, res) => {
+  try {
+    const { payment_id, status } = req.body;
+    
+    // Find payment by Flouci payment ID
+    const payment = await Paiement.findOne({ flouci_payment_id: payment_id });
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    // Update payment status
+    let newStatus = status === 'paid' ? 'réussi' : 'échoué';
+    payment.statut = newStatus;
+    payment.date_paiement = new Date();
+    await payment.save();
+
+    if (status === 'paid') {
+      // Update reservation status
+      await Reservation.findByIdAndUpdate(payment.reservation_id, {
+        Status: 'confirmé'
+      });
+    }
+
+    res.status(200).send('Webhook processed');
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Failed to process webhook' });
+  }
+};
+router.post('/flouci-initiate', initiateFlouciPayment);
+router.get('/flouci-status/:paymentId', verifyFlouciPayment);
+router.post('/flouci-webhook', flouciWebhook);
+
+
   
 
 module.exports = router;

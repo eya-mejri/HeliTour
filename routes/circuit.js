@@ -8,40 +8,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-
-//AJOUTER Circuit (admin)
-/*router.post('/addCircuit2',async (req, res) => {
-    try {
-        const { Nom, Description, Prix, Disponibilite,villeId } = req.body;
-
-        // Validate required fields
-        if (!Nom || !Description ||  Prix === undefined ||!villeId) {
-            return res.status(400).json({ error: "Veuillez fournir toutes les informations requises !" });
-        }
-        // Check if the ville exists
-        const ville = await Ville.findById(villeId);
-        if (!ville) {
-            return res.status(404).json({ error: "Ville introuvable !" });
-        }
-        // Create and save the circuit
-        const newCircuit = new circuit({
-            Nom,
-            Description,
-            Prix,
-            Disponibilite,
-            villeId,
-            vols: []
-        });
-
-        const savedCircuit = await newCircuit.save();
-        // Add the circuit to the list of circuits in the Ville
-        ville.circuits.push(savedCircuit._id);
-        await ville.save();
-        res.status(201).json(savedCircuit);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});*/
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -200,60 +166,6 @@ router.get('/getbyvilleid/:id', async (req, res) => {
     }
 });
 
-// mise a jour de circuit by id (admin)
-/*router.put('/putCircuit',, async (req, res) => {
-    try {
-        const { _id } = req.body; 
-        const dataToUpdate = req.body;  
-
-        // Trouver un utilisateur par son email
-        const updatedCircuit = await circuit.findOneAndUpdate({ _id }, dataToUpdate, { new: true });
-
-        if (!updatedCircuit) {
-            return res.status(404).json({ error: "circuit non trouvé" });
-        }
-
-        res.status(200).json(updatedCircuit);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});*/
-
-
-
-// Update circuit
-/*router.put('/putCircuit', upload, async (req, res) => {
-    try {
-        const { _id, Nom, Description, Prix, Disponibilite, villeId, removePhoto } = req.body;
-        
-        // Find existing circuit
-        const existingCircuit = await circuit.findById(_id);
-        if (!existingCircuit) {
-            return res.status(404).json({ error: "Circuit not found" });
-        }
-
-        // Handle photo deletion if requested
-        if (removePhoto === 'true') {
-            if (existingCircuit.photos.length > 0) {
-                const photoPath = path.join(__dirname, '..', 'public', 'assets', 'img', 'circuits', existingCircuit.photos[0]);
-                fs.unlinkSync(photoPath);
-                existingCircuit.photos = [];
-            }
-        }
-
-        // Update other fields
-        existingCircuit.Nom = Nom;
-        existingCircuit.Description = Description;
-        existingCircuit.Prix = Number(Prix);
-        existingCircuit.Disponibilite = Disponibilite === "true";
-        existingCircuit.villeId = villeId;
-
-        const updatedCircuit = await existingCircuit.save();
-        res.status(200).json(updatedCircuit);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});*/
 router.put('/putCircuit', upload, async (req, res) => {
     try {
         const { _id, Nom, Description, Prix, Disponibilite, villeId } = req.body;

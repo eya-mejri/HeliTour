@@ -51,11 +51,9 @@ router.get('/userInfo', verifyToken, async (req, res) => {
         if (!usr) {
             return res.status(404).send("Utilisateur non trouvé");
         }
-
-        // Populate Adresse and Role fields, but only fetch the 'Nom' field for Role
         const userInfo = await Utilisateur.findById(usr._id)
             .populate('Adresse')
-            .populate('Role', 'Nom') // Only fetch the 'Nom' field for Role
+            .populate('Role', 'Nom') 
             .exec();
 
         res.status(200).json(userInfo);
@@ -208,46 +206,6 @@ router.post('/registerAdmin',verifyToken,authorizeRoles('Admin'), async (req, re
 })
 
 
-
-// register for admins
-/*router.post('/addAdmin', async (req, res) => {
-    try {
-        const { Nom, Prenom, Email, Num_Telephone, AdresseData } = req.body;
-        // Créer l'adresse
-        const newAdresse = new Adresse({
-            Pays: AdresseData.Pays,
-            Ville: AdresseData.Ville,
-            Code_Postal: AdresseData.Code_Postal,
-            Adresse_Locale: AdresseData.Adresse_Locale
-        });
-        const savedAdresse = await newAdresse.save();
-        const salt = await bcrypt.genSalt(10)
-        const password = await bcrypt.hash(req.body.MDP, salt)
-        const MDP=password;
-        const role = await Role.findOne({ Nom:"Admin" });
-        // Créer l'utilisateur
-        const newUser = new Utilisateur({
-            Nom,
-            Prenom,
-            Email,
-            MDP,
-            Num_Telephone,
-            Adresse: savedAdresse._id,
-            Role: role._id, // Associer l'utilisateur au rôle
-        });
-        const savedUser = await newUser.save();
-        console.log(role);
-        // Ajouter l'utilisateur à la liste des utilisateurs du rôle
-        role.users.push(savedUser._id);
-        await role.save();
-
-        res.status(201).json({ message: "Admin est ajouté avec succès", utilisateur: savedUser });
-    } catch (error) {
-        res.status(500).json({ message: "Erreur lors de l'ajout de l'admin", error: error.message });
-    }
-});*/
-
-
 //delete user by the admin (admin)
 router.delete('/deleteuser/:id',verifyToken,authorizeRoles('Admin'), async (req, res) => {
     try {
@@ -334,6 +292,28 @@ router.put('/putuser', async (req, res) => {
         res.status(200).json(updatedUser);
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+router.patch('/updateUserRole/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { roleId } = req.body;
+
+        if (!roleId) return res.status(400).json({ message: "roleId is required" });
+
+        // Update user's role
+        const user = await Utilisateur.findByIdAndUpdate(
+            userId,
+            { Role: roleId },
+            { new: true }
+        ).populate('Role');
+
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        res.json({ message: "Role updated successfully", user });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
     }
 });
 
