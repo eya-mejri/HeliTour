@@ -1,4 +1,4 @@
-require('dotenv').config();
+/*require('dotenv').config();*/
 const express =require('express');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
@@ -21,7 +21,7 @@ const { sendWhatsApp } = require('./smsService');
 const socketIOClient = socketClient('http://localhost:3002'); 
 //AJOUTER Reservation
 
-router.post('/addReservation2', async (req, res) => {
+/*router.post('/addReservation2', async (req, res) => {
   try {
       const { Num_Reservation, nbr_place, disponibilite, voyageurs, volId, Status,Date_Reservation } = req.body;
 
@@ -81,7 +81,7 @@ router.post('/addReservation2', async (req, res) => {
           details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
   }
-});
+});*/
 // supprimer reservation par id
 router.delete('/deleteReservation/:id', async (req, res) => {
     try {
@@ -108,7 +108,7 @@ router.get('/getall', async (req, res) => {
 
 
 
-
+/*
 router.get('/bookingAnalytics30Days', async (req, res) => {
   try {
       const now = new Date();
@@ -239,7 +239,7 @@ router.get('/bookingAnalytics30Days', async (req, res) => {
           details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
   }
-});
+});*/
 
 // table of boukings
 router.get('/getReservationsWithDetails', async (req, res) => {
@@ -800,7 +800,7 @@ router.put('/putReservation', async (req, res) => {
 
 
 //admin update status of reservation and email send to voyageurs
-router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
+/*router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
   try {
     const { numReservation } = req.params;
     const { status } = req.body;
@@ -851,7 +851,7 @@ router.patch('/updateReservationStatus/:numReservation', async (req, res) => {
     console.error("Erreur updateReservationStatus:", error);
     res.status(500).json({ error: error.message });
   }
-});
+});*/
 
 //avoir lle montant de la reservation
 router.get('/getReservationAmount/:reservationId', async (req, res) => {
@@ -915,7 +915,7 @@ router.get('/counts', async (req, res) => {
 });
 
 
-router.post('/send-confirmation-email', async (req, res) => {
+/*router.post('/send-confirmation-email', async (req, res) => {
   const { email, reservation,phone } = req.body;
 
   if (!email || !reservation) {
@@ -962,7 +962,7 @@ router.post('/send-confirmation-email', async (req, res) => {
     console.error(error);
     res.status(500).json({ error: 'Failed to send confirmation email.' });
   }
-});
+});*/
 // Supprimer toutes les villes
 router.delete('/deleteAll', async (req, res) => {
   try {
